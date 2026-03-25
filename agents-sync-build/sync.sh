@@ -210,10 +210,18 @@ transform_for_claude() {
   mv "$tmp" "$file"
 }
 
-# Copy OpenCode-specific config files
+# Copy OpenCode-specific config files with model token substitution
 copy_opencode_configs() {
+  export MODEL_SMART="$OC_MODEL_SMART"
+  export MODEL_NORMAL="$OC_MODEL_NORMAL"
+  export MODEL_CHEAP="$OC_MODEL_CHEAP"
+  export MODEL_APPLIER="$OC_MODEL_APPLIER"
+
   for f in "$MERGED_DIR"/*.json "$MERGED_DIR"/*.json.example; do
-    [ -f "$f" ] && cp "$f" "$OPENCODE_DIR/"
+    [ -f "$f" ] || continue
+    # Apply envsubst only to MODEL_* tokens (preserve $WEB_CONTAINER, $FILE, etc.)
+    envsubst '${MODEL_SMART},${MODEL_NORMAL},${MODEL_CHEAP},${MODEL_APPLIER}' \
+      < "$f" > "$OPENCODE_DIR/$(basename "$f")"
   done
 }
 
