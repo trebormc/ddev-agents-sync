@@ -20,9 +20,8 @@ global_files: []
 post_install_actions:
   - |
     #ddev-description:Configuring Agents Sync
-    mkdir -p .ddev/agents-sync-build
-    if [ ! -f .ddev/.env.agents-sync ]; then
-      cat > .ddev/.env.agents-sync << 'ENVEOF'
+    if [ ! -f .env.agents-sync ]; then
+      cat > .env.agents-sync << 'ENVEOF'
     #ddev-generated
     # Agents Sync configuration
     # Comma-separated list of git repositories to sync
@@ -35,16 +34,16 @@ post_install_actions:
     # Timezone
     TZ=UTC
     ENVEOF
-      echo "Created .ddev/.env.agents-sync — edit to add custom repos"
+      echo "Created .env.agents-sync — edit to add custom repos"
     else
-      echo ".ddev/.env.agents-sync already exists, skipping"
+      echo ".env.agents-sync already exists, skipping"
     fi
     echo "Agents Sync configured."
     echo ""
     echo "Agents Sync installed successfully!"
     echo ""
     echo "Default: syncs from trebormc/drupal-ai-agents"
-    echo "Custom:  edit .ddev/.env.agents-sync to add your own repos"
+    echo "Custom:  edit .ddev/.env.agents-sync to add your own repos (inside .ddev/)"
     echo "Update:  ddev agents-update"
 
 removal_actions:
