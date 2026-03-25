@@ -30,7 +30,8 @@ services:
       - ddev_default
 
     # Run sync on start, then stay alive for depends_on and manual updates
-    command: ["bash", "-c", "/usr/local/bin/sync.sh && sleep infinity"]
+    # Uses ; instead of && so the container stays alive even if sync fails (no network)
+    command: ["bash", "-c", "/usr/local/bin/sync.sh; sleep infinity"]
 
 volumes:
   agents-opencode-data:
