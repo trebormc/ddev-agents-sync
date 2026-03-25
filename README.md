@@ -2,9 +2,9 @@
 
 # ddev-agents-sync
 
-A DDEV add-on that automatically syncs AI agent repositories into a shared Docker volume. Supports multiple repos with override priority — perfect for combining public agents with private customizations.
+A DDEV add-on that automatically syncs AI agent repositories and generates tool-specific configurations for [OpenCode](https://github.com/trebormc/ddev-opencode) and [Claude Code](https://github.com/trebormc/ddev-claude-code).
 
-On every `ddev start`, this container clones or updates the configured repositories and merges them into a single directory accessible by [ddev-opencode](https://github.com/trebormc/ddev-opencode) and [ddev-claude-code](https://github.com/trebormc/ddev-claude-code).
+On every `ddev start`, this container clones or updates the configured repositories, resolves model aliases, and produces two separate agent directories -- one optimized for each AI tool.
 
 ## Quick Start
 
@@ -41,12 +41,6 @@ AGENTS_REPOS=https://github.com/trebormc/drupal-ai-agents.git
 AGENTS_AUTO_UPDATE=true
 ```
 
-### Single repo (default)
-
-```bash
-AGENTS_REPOS=https://github.com/trebormc/drupal-ai-agents.git
-```
-
 ### Multiple repos (public + private override)
 
 ```bash
@@ -55,58 +49,154 @@ AGENTS_REPOS=https://github.com/trebormc/drupal-ai-agents.git,https://github.com
 
 Files from later repos override earlier ones. This lets you use the public Drupal agents as a base and add (or replace) specific agents/skills from a private repo.
 
-### Disable auto-update
-
-```bash
-AGENTS_AUTO_UPDATE=false
-```
-
-When disabled, the container uses previously cached repos without attempting `git pull`. Useful for offline work or when you want to pin a specific version.
-
 ## How It Works
 
 ```
 On ddev start:
-  ┌─────────────────────────────────────────────────────────┐
-  │  agents-sync container                                   │
-  │                                                          │
-  │  1. For each repo in AGENTS_REPOS:                      │
-  │     - If not cloned: git clone --depth 1                │
-  │     - If cloned: git pull --ff-only (silent on failure) │
-  │                                                          │
-  │  2. Merge all repos into /agents (shared volume):       │
-  │     /tmp/agent-repos/repo-0/ ─┐                         │
-  │     /tmp/agent-repos/repo-1/ ─┼─► /agents/              │
-  │     /tmp/agent-repos/repo-2/ ─┘   (later repos win)    │
-  │                                                          │
-  │  3. Sleep (stay alive for depends_on)                   │
-  └─────────────────────────────────────────────────────────┘
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  agents-sync container                                          │
+  │                                                                  │
+  │  1. Clone/update each repo in AGENTS_REPOS                      │
+  │                                                                  │
+  │  2. Merge all repos into /tmp/agents-merged (later repos win)   │
+  │                                                                  │
+  │  3. Read .env.agents (model alias → real model name mapping)     │
+  │                                                                  │
+  │  4. Generate /agents-opencode/                                   │
+  │     - envsubst: ${MODEL_CHEAP} → anthropic/claude-haiku-4-5     │
+  │     - Keeps OpenCode frontmatter (mode, tools object, permission)│
+  │     - Removes allowed_tools line                                 │
+  │     - Copies opencode.json.example, notifier config, etc.       │
+  │                                                                  │
+  │  5. Generate /agents-claude/                                     │
+  │     - envsubst: ${MODEL_CHEAP} → haiku                          │
+  │     - Converts frontmatter to Claude Code format                 │
+  │     - Renames allowed_tools → tools (CSV)                        │
+  │     - Removes mode, temperature, permission blocks               │
+  │                                                                  │
+  │  6. Sleep (stay alive for depends_on)                            │
+  └──────────────────────────────────────────────────────────────────┘
 
-  ┌──────────────────┐  ┌──────────────────┐
-  │   OpenCode       │  │   Claude Code    │
-  │   reads /agents  │  │   reads /agents  │
-  │   (read-only)    │  │   (read-only)    │
-  └──────────────────┘  └──────────────────┘
+  ┌─────────────────────────┐  ┌─────────────────────────┐
+  │       OpenCode          │  │      Claude Code        │
+  │  reads /agents-opencode │  │  reads /agents-claude   │
+  │      (read-only)        │  │      (read-only)        │
+  └─────────────────────────┘  └─────────────────────────┘
 ```
 
-The `/agents` directory is a Docker named volume (`ddev-{sitename}-agents`) — not visible on the host filesystem. It persists between restarts and is shared between containers.
+The output directories are Docker named volumes (`ddev-{sitename}-agents-opencode` and `ddev-{sitename}-agents-claude`). They persist between restarts and are not visible on the host filesystem.
 
 ### Merge strategy
 
 Files are copied from each repo in order. The merge is a simple file-level override:
 
-- `agent/*.md` — merged (later repos can add or override agents)
-- `skills/*/SKILL.md` — merged (later repos can add or override skills)
-- `rules/*.md` — merged (later repos can add or override rules)
-- `CLAUDE.md`, `opencode.json` — overridden by the last repo that provides them
+- `agent/*.md` -- merged (later repos can add or override agents)
+- `skills/*/SKILL.md` -- merged (later repos can add or override skills)
+- `rules/*.md` -- merged (later repos can add or override rules)
+- `.env.agents` -- overridden by the last repo that provides it
+- `CLAUDE.md`, `opencode.json.example` -- overridden by the last repo
 
-### Override priority
+## Model Token System
+
+Agent `.md` files use **model tokens** instead of hardcoded model names. This allows the same agent definition to work with both OpenCode and Claude Code, and makes it easy to change models globally.
+
+### Available tokens
+
+| Token | Default (OpenCode) | Default (Claude Code) | Use for |
+|-------|--------------------|-----------------------|---------|
+| `${MODEL_SMART}` | `anthropic/claude-opus-4-6` | `opus` | Quality gates, planning, research |
+| `${MODEL_NORMAL}` | `anthropic/claude-sonnet-4-5` | `sonnet` | General-purpose tasks |
+| `${MODEL_CHEAP}` | `anthropic/claude-haiku-4-5` | `haiku` | Fast, cost-effective agents |
+| `${MODEL_APPLIER}` | `anthropic/claude-haiku-4-5` | `haiku` | Mechanical code application |
+
+### How tokens are resolved
+
+The `.env.agents` file in the agent repository defines the mapping:
 
 ```bash
-AGENTS_REPOS=repo-A,repo-B,repo-C
+# OpenCode models (provider/model-id format)
+OC_MODEL_SMART=anthropic/claude-opus-4-6
+OC_MODEL_NORMAL=anthropic/claude-sonnet-4-5
+OC_MODEL_CHEAP=anthropic/claude-haiku-4-5
+OC_MODEL_APPLIER=anthropic/claude-haiku-4-5
+
+# Claude Code models (native aliases)
+CC_MODEL_SMART=opus
+CC_MODEL_NORMAL=sonnet
+CC_MODEL_CHEAP=haiku
+CC_MODEL_APPLIER=haiku
 ```
 
-If both repo-A and repo-C have `agent/drupal-dev.md`, the version from repo-C wins.
+During sync, `envsubst` replaces the tokens with the appropriate values for each tool.
+
+### Changing models
+
+To change which models your agents use:
+
+1. **For all projects**: Fork [drupal-ai-agents](https://github.com/trebormc/drupal-ai-agents), edit `.env.agents`, and point `AGENTS_REPOS` to your fork.
+
+2. **Per project**: Create a private repo with just an `.env.agents` file and add it as a second repo:
+   ```bash
+   AGENTS_REPOS=https://github.com/trebormc/drupal-ai-agents.git,https://github.com/your-org/my-model-config.git
+   ```
+   The `.env.agents` from your repo will override the public one.
+
+### Writing agents with tokens
+
+If you create custom agents in your own repository, use the same tokens in the frontmatter:
+
+```yaml
+---
+description: My custom agent for code review.
+model: ${MODEL_SMART}
+mode: subagent
+tools:
+  read: true
+  glob: true
+  grep: true
+  bash: false
+permission:
+  bash: deny
+allowed_tools: Read, Glob, Grep
+---
+
+Your agent prompt here...
+```
+
+The sync script will automatically substitute the tokens when generating configs for each tool. See [Fat Frontmatter](#fat-frontmatter) for the full format.
+
+### Fat Frontmatter
+
+Agent `.md` files use a "fat frontmatter" format that contains configuration for **both** OpenCode and Claude Code. Each tool reads the fields it understands and ignores the rest:
+
+```yaml
+---
+description: Short description of what this agent does.
+model: ${MODEL_CHEAP}                  # Token, replaced by sync
+
+# OpenCode fields (Claude Code ignores these)
+mode: subagent                          # primary or subagent
+temperature: 0.1                        # optional
+tools:                                  # tool availability (YAML object)
+  read: true
+  glob: true
+  grep: true
+  bash: false
+  write: false
+  edit: false
+permission:                             # permission policy
+  bash: deny
+
+# Claude Code field (OpenCode ignores this, sync renames to "tools:")
+allowed_tools: Read, Glob, Grep         # tool availability (CSV)
+---
+
+Agent system prompt content...
+```
+
+During sync:
+- **For OpenCode**: the `allowed_tools:` line is removed. Everything else stays.
+- **For Claude Code**: `mode:`, `temperature:`, `tools:` (object), and `permission:` are removed. `allowed_tools:` is renamed to `tools:`.
 
 ## Commands
 
@@ -117,17 +207,6 @@ Manually trigger a sync without restarting DDEV:
 ```bash
 ddev agents-update
 ```
-
-## Local Path Mode
-
-If you prefer to manage agents locally instead of syncing from git, you can skip this add-on and use the host directory mount in OpenCode or Claude Code:
-
-```bash
-# In .ddev/.env.opencode
-HOST_OPENCODE_CONFIG_DIR=/path/to/your/local/agents/
-```
-
-When `HOST_OPENCODE_CONFIG_DIR` is set, OpenCode uses the host directory directly instead of the shared volume.
 
 ## Part of DDEV AI Workspace
 
