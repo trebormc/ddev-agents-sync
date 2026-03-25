@@ -1,0 +1,53 @@
+name: ddev-agents-sync
+
+ddev_version_constraint: '>= v1.23.5'
+
+dependencies: []
+
+pre_install_actions:
+  - |
+    #ddev-description:Checking prerequisites for Agents Sync
+    echo "Installing ddev-agents-sync add-on..."
+
+project_files:
+  - docker-compose.agents-sync.yaml
+  - agents-sync-build/Dockerfile.agents-sync
+  - agents-sync-build/sync.sh
+  - commands/host/agents-update
+
+global_files: []
+
+post_install_actions:
+  - |
+    #ddev-description:Configuring Agents Sync
+    if [ ! -f .ddev/.env.agents-sync ]; then
+      cat > .ddev/.env.agents-sync << 'ENVEOF'
+    #ddev-generated
+    # Agents Sync configuration
+    # Comma-separated list of git repositories to sync
+    # Later repos override earlier ones (useful for private overrides)
+    AGENTS_REPOS=https://github.com/trebormc/drupal-ai-agents.git
+
+    # Set to "false" to disable automatic sync on ddev start
+    AGENTS_AUTO_UPDATE=true
+
+    # Timezone
+    TZ=UTC
+    ENVEOF
+      echo "Created .ddev/.env.agents-sync — edit to add custom repos"
+    else
+      echo ".ddev/.env.agents-sync already exists, skipping"
+    fi
+    chmod +x .ddev/agents-sync-build/sync.sh
+    chmod +x .ddev/commands/host/agents-update
+    echo ""
+    echo "Agents Sync installed successfully!"
+    echo ""
+    echo "Default: syncs from trebormc/drupal-ai-agents"
+    echo "Custom:  edit .ddev/.env.agents-sync to add your own repos"
+    echo "Update:  ddev agents-update"
+
+removal_actions:
+  - |
+    #ddev-description:Cleaning up Agents Sync
+    echo "Agents Sync add-on removed."

@@ -1,0 +1,31 @@
+#ddev-generated
+# Agents Sync — Lightweight container that syncs AI agent repositories
+# Only git and bash. Merges multiple repos into a shared volume.
+
+FROM ubuntu:24.04
+
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install only what we need: git and bash
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create user with matching UID/GID
+RUN groupadd --gid ${USER_GID} sync 2>/dev/null || true \
+    && useradd --uid ${USER_UID} --gid ${USER_GID} -m -s /bin/bash sync 2>/dev/null || true
+
+# Create directories
+RUN mkdir -p /agents /tmp/agent-repos \
+    && chown -R ${USER_UID}:${USER_GID} /agents /tmp/agent-repos
+
+# Copy sync script
+COPY agents-sync-build/sync.sh /usr/local/bin/sync.sh
+RUN chmod +x /usr/local/bin/sync.sh
+
+USER sync
+WORKDIR /agents

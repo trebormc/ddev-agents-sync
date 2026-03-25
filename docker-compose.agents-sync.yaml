@@ -1,0 +1,43 @@
+#ddev-generated
+# Agents Sync — Syncs AI agent repositories into a shared volume
+# Install: ddev add-on get trebormc/ddev-agents-sync
+
+services:
+  agents-sync:
+    container_name: ddev-${DDEV_SITENAME}-agents-sync
+    hostname: agents-sync
+    build:
+      context: .
+      dockerfile: agents-sync-build/Dockerfile.agents-sync
+    labels:
+      com.ddev.site-name: ${DDEV_SITENAME}
+      com.ddev.approot: ${DDEV_APPROOT}
+    restart: "no"
+    user: "${DDEV_UID:-1000}:${DDEV_GID:-1000}"
+
+    volumes:
+      - agents-data:/agents
+      - ddev-global-cache:/mnt/ddev-global-cache
+
+    environment:
+      - AGENTS_REPOS=${AGENTS_REPOS:-https://github.com/trebormc/drupal-ai-agents.git}
+      - AGENTS_AUTO_UPDATE=${AGENTS_AUTO_UPDATE:-true}
+      - TZ=${TZ:-UTC}
+
+    networks:
+      - default
+      - ddev_default
+
+    # Run sync on start, then stay alive for depends_on and manual updates
+    command: ["bash", "-c", "/usr/local/bin/sync.sh && sleep infinity"]
+
+volumes:
+  agents-data:
+    name: ddev-${DDEV_SITENAME}-agents
+  ddev-global-cache:
+    external: true
+
+networks:
+  ddev_default:
+    name: ddev_default
+    external: true

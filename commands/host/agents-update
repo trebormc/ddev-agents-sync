@@ -1,0 +1,12 @@
+#!/bin/bash
+
+#ddev-generated
+## Description: Manually update AI agents from configured repositories
+## Usage: agents-update
+## Example: ddev agents-update
+## ExecRaw: true
+
+echo "Updating AI agents..."
+ddev exec -s agents-sync /usr/local/bin/sync.sh
+echo ""
+echo "Agents updated. Restart OpenCode or Claude Code to pick up changes."
