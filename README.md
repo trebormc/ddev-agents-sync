@@ -129,12 +129,19 @@ HOST_OPENCODE_CONFIG_DIR=/path/to/your/local/agents/
 
 When `HOST_OPENCODE_CONFIG_DIR` is set, OpenCode uses the host directory directly instead of the shared volume.
 
-## Related
+## Part of DDEV AI Workspace
 
-- [drupal-ai-agents](https://github.com/trebormc/drupal-ai-agents) -- Default agents, rules, and skills for Drupal development
-- [ddev-opencode](https://github.com/trebormc/ddev-opencode) -- OpenCode AI container
-- [ddev-claude-code](https://github.com/trebormc/ddev-claude-code) -- Claude Code container
-- [ddev-ralph](https://github.com/trebormc/ddev-ralph) -- Autonomous task runner
+This add-on is part of [DDEV AI Workspace](https://github.com/trebormc/ddev-ai-workspace), a modular ecosystem of DDEV add-ons for AI-powered Drupal development.
+
+| Repository | Description | Relationship |
+|------------|-------------|--------------|
+| [ddev-ai-workspace](https://github.com/trebormc/ddev-ai-workspace) | Meta add-on that installs the full AI development stack with one command. | Workspace |
+| [ddev-opencode](https://github.com/trebormc/ddev-opencode) | [OpenCode](https://opencode.ai) AI CLI container for interactive development. | Auto-installs this add-on |
+| [ddev-claude-code](https://github.com/trebormc/ddev-claude-code) | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI container for interactive development. | Auto-installs this add-on |
+| [ddev-ralph](https://github.com/trebormc/ddev-ralph) | Autonomous AI task orchestrator. Delegates work to OpenCode or Claude Code. | Does not require this add-on |
+| [ddev-beads](https://github.com/trebormc/ddev-beads) | [Beads](https://github.com/steveyegge/beads) git-backed task tracker shared by all AI containers. | Sibling dependency |
+| [ddev-playwright-mcp](https://github.com/trebormc/ddev-playwright-mcp) | Headless Playwright browser for browser automation and visual testing. | Sibling dependency |
+| [drupal-ai-agents](https://github.com/trebormc/drupal-ai-agents) | 13 agents, 4 rules, 14 skills for Drupal development. Default repo synced by this add-on. | Content synced by this add-on |
 
 ## Disclaimer
 
