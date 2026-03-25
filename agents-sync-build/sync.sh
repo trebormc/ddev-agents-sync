@@ -1,4 +1,5 @@
 #!/bin/bash
+#ddev-generated
 
 # =============================================================================
 # Agents Sync — Clones/updates AI agent repositories and generates configs

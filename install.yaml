@@ -39,7 +39,7 @@ post_install_actions:
     else
       echo ".ddev/.env.agents-sync already exists, skipping"
     fi
-    chmod +x .ddev/agents-sync-build/sync.sh
+    echo "Agents Sync configured."
     echo ""
     echo "Agents Sync installed successfully!"
     echo ""
