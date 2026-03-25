@@ -211,6 +211,7 @@ transform_for_claude() {
 }
 
 # Copy OpenCode-specific config files with model token substitution
+# .example files are generated as final config (without .example suffix)
 copy_opencode_configs() {
   export MODEL_SMART="$OC_MODEL_SMART"
   export MODEL_NORMAL="$OC_MODEL_NORMAL"
@@ -219,9 +220,13 @@ copy_opencode_configs() {
 
   for f in "$MERGED_DIR"/*.json "$MERGED_DIR"/*.json.example; do
     [ -f "$f" ] || continue
+    local name
+    name=$(basename "$f")
+    # Strip .example suffix — the output is a final config, not a template
+    name="${name%.example}"
     # Apply envsubst only to MODEL_* tokens (preserve $WEB_CONTAINER, $FILE, etc.)
     envsubst '${MODEL_SMART},${MODEL_NORMAL},${MODEL_CHEAP},${MODEL_APPLIER}' \
-      < "$f" > "$OPENCODE_DIR/$(basename "$f")"
+      < "$f" > "$OPENCODE_DIR/$name"
   done
 }
 
