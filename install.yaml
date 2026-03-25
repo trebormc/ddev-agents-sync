@@ -20,6 +20,7 @@ global_files: []
 post_install_actions:
   - |
     #ddev-description:Configuring Agents Sync
+    mkdir -p .ddev/agents-sync-build
     if [ ! -f .ddev/.env.agents-sync ]; then
       cat > .ddev/.env.agents-sync << 'ENVEOF'
     #ddev-generated
