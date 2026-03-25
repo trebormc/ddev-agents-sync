@@ -1,12 +1,18 @@
 #!/bin/bash
 
 # =============================================================================
-# Agents Sync — Clones/updates AI agent repositories and merges into /agents
+# Agents Sync — Clones/updates AI agent repositories and generates configs
 # =============================================================================
 #
 # Reads AGENTS_REPOS (comma-separated list of git URLs) and syncs each one.
-# Files are merged into /agents in order — later repos override earlier ones.
-# Fails silently on network errors (keeps existing files).
+# Files are merged in order — later repos override earlier ones.
+# Then generates tool-specific agent directories:
+#   /agents-opencode  — agents with OpenCode model names (provider/model-id)
+#   /agents-claude    — agents with Claude Code model names (native aliases)
+#
+# Model tokens in agent/*.md frontmatter (${MODEL_SMART}, ${MODEL_NORMAL},
+# ${MODEL_CHEAP}, ${MODEL_APPLIER}) are replaced with real model names from
+# .env.agents during generation.
 #
 # Environment:
 #   AGENTS_REPOS        Comma-separated git URLs (default: trebormc/drupal-ai-agents)
@@ -15,8 +21,10 @@
 
 set -uo pipefail
 
-AGENTS_DIR="/agents"
+MERGED_DIR="/tmp/agents-merged"
 REPOS_DIR="/tmp/agent-repos"
+OPENCODE_DIR="/agents-opencode"
+CLAUDE_DIR="/agents-claude"
 DEFAULT_REPO="https://github.com/trebormc/drupal-ai-agents.git"
 REPOS="${AGENTS_REPOS:-$DEFAULT_REPO}"
 AUTO_UPDATE="${AGENTS_AUTO_UPDATE:-true}"
@@ -45,36 +53,35 @@ sync_repo() {
 }
 
 merge_repos() {
-  log "Merging repositories into $AGENTS_DIR"
+  log "Merging repositories into $MERGED_DIR"
+  rm -rf "$MERGED_DIR"
+  mkdir -p "$MERGED_DIR"
 
-  # Directories to merge
   local dirs="agent rules skills"
-
-  # First pass: copy everything from each repo in order (later repos override)
   local index=0
   IFS=',' read -ra REPO_LIST <<< "$REPOS"
   for url in "${REPO_LIST[@]}"; do
-    url=$(echo "$url" | xargs) # trim whitespace
+    url=$(echo "$url" | xargs)
     local repo_dir="$REPOS_DIR/repo-$index"
 
     if [ -d "$repo_dir" ]; then
-      # Copy top-level config files (opencode.json, CLAUDE.md, etc.)
-      for f in "$repo_dir"/*.json "$repo_dir"/*.json.example "$repo_dir"/CLAUDE.md; do
-        [ -f "$f" ] && cp "$f" "$AGENTS_DIR/"
+      # Copy top-level config files
+      for f in "$repo_dir"/*.json "$repo_dir"/*.json.example "$repo_dir"/CLAUDE.md "$repo_dir"/.env.agents; do
+        [ -f "$f" ] && cp "$f" "$MERGED_DIR/"
       done
 
       # Merge agent/rules/skills directories
       for dir in $dirs; do
         if [ -d "$repo_dir/$dir" ]; then
-          mkdir -p "$AGENTS_DIR/$dir"
-          cp -r "$repo_dir/$dir"/* "$AGENTS_DIR/$dir/" 2>/dev/null || true
+          mkdir -p "$MERGED_DIR/$dir"
+          cp -r "$repo_dir/$dir"/* "$MERGED_DIR/$dir/" 2>/dev/null || true
         fi
       done
 
       # Copy skills subdirectories (preserve structure)
       if [ -d "$repo_dir/skills" ]; then
         for skill_dir in "$repo_dir"/skills/*/; do
-          [ -d "$skill_dir" ] && cp -r "$skill_dir" "$AGENTS_DIR/skills/"
+          [ -d "$skill_dir" ] && cp -r "$skill_dir" "$MERGED_DIR/skills/"
         done
       fi
     fi
@@ -85,9 +92,134 @@ merge_repos() {
   log "Merge complete"
 }
 
+# Load model aliases from .env.agents
+load_env() {
+  local env_file="$MERGED_DIR/.env.agents"
+  if [ -f "$env_file" ]; then
+    # Source only variable assignments, skip comments
+    set -a
+    # shellcheck disable=SC1090
+    source "$env_file"
+    set +a
+    log "Loaded model aliases from .env.agents"
+  else
+    log "WARNING: .env.agents not found, using defaults"
+    # Defaults
+    export OC_MODEL_SMART="anthropic/claude-opus-4-6"
+    export OC_MODEL_NORMAL="anthropic/claude-sonnet-4-5"
+    export OC_MODEL_CHEAP="anthropic/claude-haiku-4-5"
+    export OC_MODEL_APPLIER="anthropic/claude-haiku-4-5"
+    export CC_MODEL_SMART="opus"
+    export CC_MODEL_NORMAL="sonnet"
+    export CC_MODEL_CHEAP="haiku"
+    export CC_MODEL_APPLIER="haiku"
+  fi
+}
+
+# Generate agent files for a specific tool (OpenCode or Claude Code)
+generate_agents() {
+  local target_dir="$1"
+  local model_smart="$2"
+  local model_normal="$3"
+  local model_cheap="$4"
+  local model_applier="$5"
+  local tool_name="$6"
+
+  mkdir -p "$target_dir/agent" "$target_dir/rules" "$target_dir/skills"
+
+  # Copy rules and skills as-is (no token substitution needed)
+  [ -d "$MERGED_DIR/rules" ] && cp -r "$MERGED_DIR/rules"/* "$target_dir/rules/" 2>/dev/null || true
+  [ -d "$MERGED_DIR/skills" ] && cp -r "$MERGED_DIR/skills"/* "$target_dir/skills/" 2>/dev/null || true
+
+  # Copy config files
+  [ -f "$MERGED_DIR/CLAUDE.md" ] && cp "$MERGED_DIR/CLAUDE.md" "$target_dir/"
+
+  # Process agent files with envsubst for model tokens
+  export MODEL_SMART="$model_smart"
+  export MODEL_NORMAL="$model_normal"
+  export MODEL_CHEAP="$model_cheap"
+  export MODEL_APPLIER="$model_applier"
+
+  local count=0
+  for src in "$MERGED_DIR"/agent/*.md; do
+    [ -f "$src" ] || continue
+    local name
+    name=$(basename "$src")
+
+    # Substitute model tokens
+    envsubst '${MODEL_SMART},${MODEL_NORMAL},${MODEL_CHEAP},${MODEL_APPLIER}' \
+      < "$src" > "$target_dir/agent/$name"
+
+    # For Claude Code: transform frontmatter to Claude Code format
+    if [ "$tool_name" = "claude" ]; then
+      transform_for_claude "$target_dir/agent/$name"
+    else
+      # For OpenCode: just remove the allowed_tools line
+      sed -i '/^allowed_tools:/d' "$target_dir/agent/$name"
+    fi
+
+    count=$((count + 1))
+  done
+
+  log "Generated $count agents for $tool_name"
+}
+
+# Transform agent .md from fat frontmatter to Claude Code format
+# Removes: mode, temperature, maxSteps, tools (object), permission (block)
+# Renames: allowed_tools → tools
+transform_for_claude() {
+  local file="$1"
+  local tmp
+  tmp=$(mktemp)
+
+  awk '
+  BEGIN { in_fm=0; fm_count=0; skip_block=0; skip_indent="" }
+  /^---$/ {
+    fm_count++
+    if (fm_count == 1) { in_fm=1; print; next }
+    if (fm_count == 2) { in_fm=0; print; next }
+  }
+  !in_fm { print; next }
+
+  # Inside frontmatter processing
+  in_fm {
+    # Skip mode, temperature, maxSteps lines
+    if ($0 ~ /^(mode|temperature|maxSteps):/) next
+
+    # Skip tools: block (YAML object, not the CSV line)
+    if ($0 ~ /^tools:$/) { skip_block=1; next }
+    if (skip_block && $0 ~ /^  [a-z]/) next
+    if (skip_block && $0 !~ /^  /) skip_block=0
+
+    # Skip permission: block
+    if ($0 ~ /^permission:$/) { skip_block=1; next }
+    if (skip_block && $0 ~ /^  /) next
+    if (skip_block && $0 !~ /^  /) skip_block=0
+
+    # Rename allowed_tools → tools
+    if ($0 ~ /^allowed_tools:/) {
+      sub(/^allowed_tools:/, "tools:")
+      print
+      next
+    }
+
+    print
+  }
+  ' "$file" > "$tmp"
+
+  mv "$tmp" "$file"
+}
+
+# Copy OpenCode-specific config files
+copy_opencode_configs() {
+  for f in "$MERGED_DIR"/*.json "$MERGED_DIR"/*.json.example; do
+    [ -f "$f" ] && cp "$f" "$OPENCODE_DIR/"
+  done
+}
+
 main() {
   log "Starting sync"
-  mkdir -p "$AGENTS_DIR" "$REPOS_DIR"
+  mkdir -p "$REPOS_DIR" "$OPENCODE_DIR" "$CLAUDE_DIR"
 
   # Sync each repo
   local index=0
@@ -98,10 +230,33 @@ main() {
     index=$((index + 1))
   done
 
-  # Merge all repos into the shared volume
+  # Merge all repos into temp dir
   merge_repos
 
-  log "Done — $(ls "$AGENTS_DIR"/agent/*.md 2>/dev/null | wc -l) agents, $(ls -d "$AGENTS_DIR"/skills/*/ 2>/dev/null | wc -l) skills available"
+  # Load model aliases
+  load_env
+
+  # Generate for OpenCode (OC_* model values)
+  generate_agents "$OPENCODE_DIR" \
+    "$OC_MODEL_SMART" "$OC_MODEL_NORMAL" "$OC_MODEL_CHEAP" "$OC_MODEL_APPLIER" \
+    "opencode"
+
+  # Copy OpenCode-specific configs (json, notifier, etc.)
+  copy_opencode_configs
+
+  # Generate for Claude Code (CC_* model values)
+  generate_agents "$CLAUDE_DIR" \
+    "$CC_MODEL_SMART" "$CC_MODEL_NORMAL" "$CC_MODEL_CHEAP" "$CC_MODEL_APPLIER" \
+    "claude"
+
+  local oc_count
+  oc_count=$(ls "$OPENCODE_DIR"/agent/*.md 2>/dev/null | wc -l)
+  local cc_count
+  cc_count=$(ls "$CLAUDE_DIR"/agent/*.md 2>/dev/null | wc -l)
+  local skills_count
+  skills_count=$(ls -d "$OPENCODE_DIR"/skills/*/ 2>/dev/null | wc -l)
+
+  log "Done — OpenCode: $oc_count agents, Claude: $cc_count agents, $skills_count skills"
 }
 
 main

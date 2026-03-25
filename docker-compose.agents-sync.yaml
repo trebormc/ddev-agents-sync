@@ -1,5 +1,5 @@
 #ddev-generated
-# Agents Sync — Syncs AI agent repositories into a shared volume
+# Agents Sync — Syncs AI agent repos, generates configs for OpenCode and Claude Code
 # Install: ddev add-on get trebormc/ddev-agents-sync
 
 services:
@@ -16,7 +16,8 @@ services:
     user: "${DDEV_UID:-1000}:${DDEV_GID:-1000}"
 
     volumes:
-      - agents-data:/agents
+      - agents-opencode-data:/agents-opencode
+      - agents-claude-data:/agents-claude
       - ddev-global-cache:/mnt/ddev-global-cache
 
     environment:
@@ -32,8 +33,10 @@ services:
     command: ["bash", "-c", "/usr/local/bin/sync.sh && sleep infinity"]
 
 volumes:
-  agents-data:
-    name: ddev-${DDEV_SITENAME}-agents
+  agents-opencode-data:
+    name: ddev-${DDEV_SITENAME}-agents-opencode
+  agents-claude-data:
+    name: ddev-${DDEV_SITENAME}-agents-claude
   ddev-global-cache:
     external: true
 
