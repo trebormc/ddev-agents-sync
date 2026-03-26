@@ -173,17 +173,28 @@ transform_for_claude() {
   local tmp
   tmp=$(mktemp)
 
-  awk '
-  BEGIN { in_fm=0; fm_count=0; skip_block=0; skip_indent="" }
+  # Derive agent name from filename (e.g., drupal-dev.md → drupal-dev)
+  local agent_name
+  agent_name=$(basename "$file" .md)
+
+  awk -v agent_name="$agent_name" '
+  BEGIN { in_fm=0; fm_count=0; skip_block=0; name_added=0 }
   /^---$/ {
     fm_count++
     if (fm_count == 1) { in_fm=1; print; next }
-    if (fm_count == 2) { in_fm=0; print; next }
+    if (fm_count == 2) {
+      # Add name before closing frontmatter if not yet added
+      if (!name_added) { print "name: " agent_name; name_added=1 }
+      in_fm=0; print; next
+    }
   }
   !in_fm { print; next }
 
   # Inside frontmatter processing
   in_fm {
+    # Add name: right after opening ---
+    if (!name_added) { print "name: " agent_name; name_added=1 }
+
     # Skip mode, temperature, maxSteps lines
     if ($0 ~ /^(mode|temperature|maxSteps):/) next
 
