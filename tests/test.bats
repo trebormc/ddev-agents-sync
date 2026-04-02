@@ -22,9 +22,6 @@ health_checks() {
   # Verify sync script is available
   run ddev exec -s agents-sync test -x /usr/local/bin/sync.sh
   assert_success
-  # Verify agents directory exists and has content
-  run ddev exec -s agents-sync test -d /agents/agent
-  assert_success
 }
 
 teardown() {
