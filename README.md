@@ -63,7 +63,7 @@ On ddev start:
   │  3. Read .env.agents (model alias → real model name mapping)     │
   │                                                                  │
   │  4. Generate /agents-opencode/                                   │
-  │     - envsubst: ${MODEL_CHEAP} → anthropic/claude-haiku-4-5     │
+  │     - envsubst: ${MODEL_CHEAP} → opencode/gpt-5-nano            │
   │     - Keeps OpenCode frontmatter (mode, tools object, permission)│
   │     - Removes allowed_tools line                                 │
   │     - Copies opencode.json.example, notifier config, etc.       │
@@ -104,10 +104,10 @@ Agent `.md` files use **model tokens** instead of hardcoded model names. This al
 
 | Token | Default (OpenCode) | Default (Claude Code) | Use for |
 |-------|--------------------|-----------------------|---------|
-| `${MODEL_SMART}` | `anthropic/claude-opus-4-6` | `opus` | Quality gates, planning, research |
-| `${MODEL_NORMAL}` | `anthropic/claude-sonnet-4-5` | `sonnet` | General-purpose tasks |
-| `${MODEL_CHEAP}` | `anthropic/claude-haiku-4-5` | `haiku` | Fast, cost-effective agents |
-| `${MODEL_APPLIER}` | `anthropic/claude-haiku-4-5` | `haiku` | Mechanical code application |
+| `${MODEL_SMART}` | `opencode/kimi-k2.5` | `opus` | Quality gates, planning, research |
+| `${MODEL_NORMAL}` | `opencode/minimax-m2.5` | `sonnet` | General-purpose tasks |
+| `${MODEL_CHEAP}` | `opencode/gpt-5-nano` | `haiku` | Fast, cost-effective agents |
+| `${MODEL_APPLIER}` | `opencode/gpt-5-nano` | `haiku` | Mechanical code application |
 
 ### How tokens are resolved
 
@@ -206,6 +206,13 @@ Manually trigger a sync without restarting DDEV:
 
 ```bash
 ddev agents-update
+```
+
+## Uninstallation
+
+```bash
+ddev add-on remove ddev-agents-sync
+ddev restart
 ```
 
 ## Part of DDEV AI Workspace
