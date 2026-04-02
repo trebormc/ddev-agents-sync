@@ -106,10 +106,10 @@ load_env() {
   else
     log "WARNING: .env.agents not found, using defaults"
     # Defaults
-    export OC_MODEL_SMART="anthropic/claude-opus-4-6"
-    export OC_MODEL_NORMAL="anthropic/claude-sonnet-4-5"
-    export OC_MODEL_CHEAP="anthropic/claude-haiku-4-5"
-    export OC_MODEL_APPLIER="anthropic/claude-haiku-4-5"
+    export OC_MODEL_SMART="opencode/kimi-k2.5"
+    export OC_MODEL_NORMAL="opencode/minimax-m2.5"
+    export OC_MODEL_CHEAP="opencode/gpt-5-nano"
+    export OC_MODEL_APPLIER="opencode/gpt-5-nano"
     export CC_MODEL_SMART="opus"
     export CC_MODEL_NORMAL="sonnet"
     export CC_MODEL_CHEAP="haiku"
