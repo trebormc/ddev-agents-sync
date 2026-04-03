@@ -38,30 +38,31 @@ post_install_actions:
     else
       echo ".env.agents-sync already exists, skipping"
     fi
-    # Create .env.agents with model configuration if missing
+    # Create empty .env.agents placeholder if missing.
+    # Docker requires the file to exist before mounting, otherwise it creates a directory.
+    # Default models come from the agent repo (.env.agents in drupal-ai-agents).
+    # To override, uncomment and edit the variables in this file.
     if [ ! -f .env.agents ]; then
       cat > .env.agents << 'MODELSEOF'
     #ddev-generated
-    # AI Model Configuration
-    # Edit these values to change which models your AI agents use.
+    # AI Model Configuration (optional overrides)
+    # Default models come from the agent repository automatically.
+    # Uncomment and edit any variable below to override.
     # Changes take effect after: ddev agents-update && ddev restart
     #
-    # Tokens in agent definitions (${MODEL_SMART}, ${MODEL_NORMAL}, etc.)
-    # are replaced with these values during sync.
-
     # --- OpenCode models (provider/model-id format) ---
-    OC_MODEL_SMART=opencode/kimi-k2.5
-    OC_MODEL_NORMAL=opencode/minimax-m2.5
-    OC_MODEL_CHEAP=opencode/gpt-5-nano
-    OC_MODEL_APPLIER=opencode/gpt-5-nano
-
+    #OC_MODEL_SMART=opencode/kimi-k2.5
+    #OC_MODEL_NORMAL=opencode/minimax-m2.5
+    #OC_MODEL_CHEAP=opencode/gpt-5-nano
+    #OC_MODEL_APPLIER=opencode/gpt-5-nano
+    #
     # --- Claude Code models (native aliases) ---
-    CC_MODEL_SMART=opus
-    CC_MODEL_NORMAL=sonnet
-    CC_MODEL_CHEAP=haiku
-    CC_MODEL_APPLIER=haiku
+    #CC_MODEL_SMART=opus
+    #CC_MODEL_NORMAL=sonnet
+    #CC_MODEL_CHEAP=haiku
+    #CC_MODEL_APPLIER=haiku
     MODELSEOF
-      echo "Created .env.agents — edit to customize AI models"
+      echo "Created .env.agents — defaults from repo, edit to override"
     else
       echo ".env.agents already exists, skipping"
     fi

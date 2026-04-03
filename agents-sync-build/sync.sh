@@ -92,37 +92,31 @@ merge_repos() {
 }
 
 # Load model aliases from .env.agents
-# Priority: local override (.ddev/.env.agents) > repo default > hardcoded defaults
+# Priority: local override (.ddev/.env.agents) > repo default
 load_env() {
-  local env_file="$MERGED_DIR/.env.agents"
+  local repo_file="$MERGED_DIR/.env.agents"
   local override_file="/tmp/env-agents-override"
+  local env_file=""
 
-  if [ -f "$env_file" ]; then
-    set -a
-    # shellcheck disable=SC1090
-    source "$env_file"
-    set +a
-    log "Loaded model aliases from repo .env.agents"
-  else
-    log "WARNING: .env.agents not found in repo, using defaults"
-    export OC_MODEL_SMART="opencode/kimi-k2.5"
-    export OC_MODEL_NORMAL="opencode/minimax-m2.5"
-    export OC_MODEL_CHEAP="opencode/gpt-5-nano"
-    export OC_MODEL_APPLIER="opencode/gpt-5-nano"
-    export CC_MODEL_SMART="opus"
-    export CC_MODEL_NORMAL="sonnet"
-    export CC_MODEL_CHEAP="haiku"
-    export CC_MODEL_APPLIER="haiku"
+  # Local override takes priority over repo default
+  # Only use override if it has uncommented variable assignments
+  if [ -f "$override_file" ] && grep -q '^[A-Z]' "$override_file" 2>/dev/null; then
+    env_file="$override_file"
+    log "Using local model config from .ddev/.env.agents"
+  elif [ -f "$repo_file" ]; then
+    env_file="$repo_file"
+    log "Using model config from repo .env.agents"
   fi
 
-  # Apply local overrides (from .ddev/.env.agents)
-  if [ -f "$override_file" ] && [ -s "$override_file" ]; then
-    set -a
-    # shellcheck disable=SC1090
-    source "$override_file"
-    set +a
-    log "Applied local model overrides from .ddev/.env.agents"
+  if [ -z "$env_file" ]; then
+    log "ERROR: No .env.agents found. Sync the repo or create .ddev/.env.agents"
+    return 1
   fi
+
+  set -a
+  # shellcheck disable=SC1090
+  source "$env_file"
+  set +a
 }
 
 # Generate agent files for a specific tool (OpenCode or Claude Code)
