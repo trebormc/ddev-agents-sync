@@ -81,11 +81,8 @@ merge_repos() {
         fi
       done
 
-      # Copy settings.json if present
-      if [ -f "$repo_dir/.claude/settings.json" ]; then
-        mkdir -p "$MERGED_DIR/.claude"
-        cp "$repo_dir/.claude/settings.json" "$MERGED_DIR/.claude/"
-      fi
+      # Note: .claude/settings.json is NOT synced — user-level settings
+      # in the Claude Code container handle permissions (bypassPermissions mode)
     fi
 
     index=$((index + 1))
@@ -135,12 +132,6 @@ generate_agents() {
 
   # Copy config files
   [ -f "$MERGED_DIR/CLAUDE.md" ] && cp "$MERGED_DIR/CLAUDE.md" "$target_dir/"
-
-  # Copy settings.json for Claude Code
-  if [ "$tool_name" = "claude" ] && [ -f "$MERGED_DIR/.claude/settings.json" ]; then
-    mkdir -p "$target_dir/.claude"
-    cp "$MERGED_DIR/.claude/settings.json" "$target_dir/.claude/"
-  fi
 
   # Process agent files with envsubst for model tokens
   export MODEL_SMART="$model_smart"
@@ -253,12 +244,11 @@ main() {
   log "Starting sync"
   mkdir -p "$REPOS_DIR" \
     "$OPENCODE_DIR/agents" "$OPENCODE_DIR/rules" "$OPENCODE_DIR/skills" \
-    "$CLAUDE_DIR/agents" "$CLAUDE_DIR/rules" "$CLAUDE_DIR/skills" "$CLAUDE_DIR/.claude"
+    "$CLAUDE_DIR/agents" "$CLAUDE_DIR/rules" "$CLAUDE_DIR/skills"
 
   # Ensure subpath mount targets exist (prevent race condition with dependent containers)
   [ -f "$OPENCODE_DIR/CLAUDE.md" ] || touch "$OPENCODE_DIR/CLAUDE.md"
   [ -f "$CLAUDE_DIR/CLAUDE.md" ] || touch "$CLAUDE_DIR/CLAUDE.md"
-  [ -f "$CLAUDE_DIR/.claude/settings.json" ] || echo '{}' > "$CLAUDE_DIR/.claude/settings.json"
 
   # Sync each repo
   local index=0
