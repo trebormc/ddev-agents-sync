@@ -251,7 +251,14 @@ copy_opencode_configs() {
 
 main() {
   log "Starting sync"
-  mkdir -p "$REPOS_DIR" "$OPENCODE_DIR" "$CLAUDE_DIR"
+  mkdir -p "$REPOS_DIR" \
+    "$OPENCODE_DIR/agents" "$OPENCODE_DIR/rules" "$OPENCODE_DIR/skills" \
+    "$CLAUDE_DIR/agents" "$CLAUDE_DIR/rules" "$CLAUDE_DIR/skills" "$CLAUDE_DIR/.claude"
+
+  # Ensure subpath mount targets exist (prevent race condition with dependent containers)
+  [ -f "$OPENCODE_DIR/CLAUDE.md" ] || touch "$OPENCODE_DIR/CLAUDE.md"
+  [ -f "$CLAUDE_DIR/CLAUDE.md" ] || touch "$CLAUDE_DIR/CLAUDE.md"
+  [ -f "$CLAUDE_DIR/.claude/settings.json" ] || echo '{}' > "$CLAUDE_DIR/.claude/settings.json"
 
   # Sync each repo
   local index=0

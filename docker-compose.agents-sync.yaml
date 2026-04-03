@@ -33,6 +33,13 @@ services:
     # Uses ; instead of && so the container stays alive even if sync fails (no network)
     command: ["bash", "-c", "/usr/local/bin/sync.sh; sleep infinity"]
 
+    healthcheck:
+      test: ["CMD", "test", "-d", "/agents-claude/agents"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 2s
+
 volumes:
   agents-opencode-data:
     name: ddev-${DDEV_SITENAME}-agents-opencode

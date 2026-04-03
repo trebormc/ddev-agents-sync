@@ -20,8 +20,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN groupadd --gid ${USER_GID} sync 2>/dev/null || true \
     && useradd --uid ${USER_UID} --gid ${USER_GID} -m -s /bin/bash sync 2>/dev/null || true
 
-# Create directories
-RUN mkdir -p /agents-opencode /agents-claude /tmp/agent-repos /tmp/agents-merged \
+# Create directories (including subpaths that other containers mount via volume subpath)
+RUN mkdir -p /agents-opencode/agents /agents-opencode/rules /agents-opencode/skills \
+    /agents-claude/agents /agents-claude/rules /agents-claude/skills /agents-claude/.claude \
+    /tmp/agent-repos /tmp/agents-merged \
     && chown -R ${USER_UID}:${USER_GID} /agents-opencode /agents-claude /tmp/agent-repos /tmp/agents-merged
 
 # Copy sync script
