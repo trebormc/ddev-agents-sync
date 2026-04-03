@@ -38,12 +38,40 @@ post_install_actions:
     else
       echo ".env.agents-sync already exists, skipping"
     fi
+    # Create .env.agents with model configuration if missing
+    if [ ! -f .env.agents ]; then
+      cat > .env.agents << 'MODELSEOF'
+    #ddev-generated
+    # AI Model Configuration
+    # Edit these values to change which models your AI agents use.
+    # Changes take effect after: ddev agents-update && ddev restart
+    #
+    # Tokens in agent definitions (${MODEL_SMART}, ${MODEL_NORMAL}, etc.)
+    # are replaced with these values during sync.
+
+    # --- OpenCode models (provider/model-id format) ---
+    OC_MODEL_SMART=opencode/kimi-k2.5
+    OC_MODEL_NORMAL=opencode/minimax-m2.5
+    OC_MODEL_CHEAP=opencode/gpt-5-nano
+    OC_MODEL_APPLIER=opencode/gpt-5-nano
+
+    # --- Claude Code models (native aliases) ---
+    CC_MODEL_SMART=opus
+    CC_MODEL_NORMAL=sonnet
+    CC_MODEL_CHEAP=haiku
+    CC_MODEL_APPLIER=haiku
+    MODELSEOF
+      echo "Created .env.agents — edit to customize AI models"
+    else
+      echo ".env.agents already exists, skipping"
+    fi
     echo "Agents Sync configured."
     echo ""
     echo "Agents Sync installed successfully!"
     echo ""
     echo "Default: syncs from trebormc/drupal-ai-agents"
-    echo "Custom:  edit .ddev/.env.agents-sync to add your own repos (inside .ddev/)"
+    echo "Custom repos: edit .ddev/.env.agents-sync"
+    echo "Custom models: edit .ddev/.env.agents"
     echo "Update:  ddev agents-update"
 
 removal_actions:

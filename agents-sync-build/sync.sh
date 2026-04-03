@@ -92,18 +92,19 @@ merge_repos() {
 }
 
 # Load model aliases from .env.agents
+# Priority: local override (.ddev/.env.agents) > repo default > hardcoded defaults
 load_env() {
   local env_file="$MERGED_DIR/.env.agents"
+  local override_file="/tmp/env-agents-override"
+
   if [ -f "$env_file" ]; then
-    # Source only variable assignments, skip comments
     set -a
     # shellcheck disable=SC1090
     source "$env_file"
     set +a
-    log "Loaded model aliases from .env.agents"
+    log "Loaded model aliases from repo .env.agents"
   else
-    log "WARNING: .env.agents not found, using defaults"
-    # Defaults
+    log "WARNING: .env.agents not found in repo, using defaults"
     export OC_MODEL_SMART="opencode/kimi-k2.5"
     export OC_MODEL_NORMAL="opencode/minimax-m2.5"
     export OC_MODEL_CHEAP="opencode/gpt-5-nano"
@@ -112,6 +113,15 @@ load_env() {
     export CC_MODEL_NORMAL="sonnet"
     export CC_MODEL_CHEAP="haiku"
     export CC_MODEL_APPLIER="haiku"
+  fi
+
+  # Apply local overrides (from .ddev/.env.agents)
+  if [ -f "$override_file" ] && [ -s "$override_file" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$override_file"
+    set +a
+    log "Applied local model overrides from .ddev/.env.agents"
   fi
 }
 

@@ -19,6 +19,7 @@ services:
       - agents-opencode-data:/agents-opencode
       - agents-claude-data:/agents-claude
       - ddev-global-cache:/mnt/ddev-global-cache
+      - ./.env.agents:/tmp/env-agents-override:ro
 
     environment:
       - AGENTS_REPOS=${AGENTS_REPOS:-https://github.com/trebormc/drupal-ai-agents.git}
