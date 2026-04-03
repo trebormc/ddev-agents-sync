@@ -90,9 +90,9 @@ The output directories are Docker named volumes (`ddev-{sitename}-agents-opencod
 
 Files are copied from each repo in order. The merge is a simple file-level override:
 
-- `agent/*.md` -- merged (later repos can add or override agents)
-- `skills/*/SKILL.md` -- merged (later repos can add or override skills)
-- `rules/*.md` -- merged (later repos can add or override rules)
+- `.claude/agents/*.md` -- merged (later repos can add or override agents)
+- `.claude/skills/*/SKILL.md` -- merged (later repos can add or override skills)
+- `.claude/rules/*.md` -- merged (later repos can add or override rules)
 - `.env.agents` -- overridden by the last repo that provides it
 - `CLAUDE.md`, `opencode.json.example` -- overridden by the last repo
 

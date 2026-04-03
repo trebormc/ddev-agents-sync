@@ -11,9 +11,12 @@
 #   /agents-opencode  — agents with OpenCode model names (provider/model-id)
 #   /agents-claude    — agents with Claude Code model names (native aliases)
 #
-# Model tokens in agent/*.md frontmatter (${MODEL_SMART}, ${MODEL_NORMAL},
-# ${MODEL_CHEAP}, ${MODEL_APPLIER}) are replaced with real model names from
-# .env.agents during generation.
+# Model tokens in .claude/agents/*.md frontmatter (${MODEL_SMART},
+# ${MODEL_NORMAL}, ${MODEL_CHEAP}, ${MODEL_APPLIER}) are replaced with
+# real model names from .env.agents during generation.
+#
+# Source repos must use the .claude/ directory layout:
+#   .claude/agents/, .claude/rules/, .claude/skills/
 #
 # Environment:
 #   AGENTS_REPOS        Comma-separated git URLs (default: trebormc/drupal-ai-agents)
@@ -58,7 +61,6 @@ merge_repos() {
   rm -rf "$MERGED_DIR"
   mkdir -p "$MERGED_DIR"
 
-  local dirs="agent rules skills"
   local index=0
   IFS=',' read -ra REPO_LIST <<< "$REPOS"
   for url in "${REPO_LIST[@]}"; do
@@ -71,19 +73,18 @@ merge_repos() {
         [ -f "$f" ] && cp "$f" "$MERGED_DIR/"
       done
 
-      # Merge agent/rules/skills directories
-      for dir in $dirs; do
-        if [ -d "$repo_dir/$dir" ]; then
+      # Merge .claude/ subdirectories (agents, rules, skills)
+      for dir in agents rules skills; do
+        if [ -d "$repo_dir/.claude/$dir" ]; then
           mkdir -p "$MERGED_DIR/$dir"
-          cp -r "$repo_dir/$dir"/* "$MERGED_DIR/$dir/" 2>/dev/null || true
+          cp -r "$repo_dir/.claude/$dir"/* "$MERGED_DIR/$dir/" 2>/dev/null || true
         fi
       done
 
-      # Copy skills subdirectories (preserve structure)
-      if [ -d "$repo_dir/skills" ]; then
-        for skill_dir in "$repo_dir"/skills/*/; do
-          [ -d "$skill_dir" ] && cp -r "$skill_dir" "$MERGED_DIR/skills/"
-        done
+      # Copy settings.json if present
+      if [ -f "$repo_dir/.claude/settings.json" ]; then
+        mkdir -p "$MERGED_DIR/.claude"
+        cp "$repo_dir/.claude/settings.json" "$MERGED_DIR/.claude/"
       fi
     fi
 
@@ -126,7 +127,7 @@ generate_agents() {
   local model_applier="$5"
   local tool_name="$6"
 
-  mkdir -p "$target_dir/agent" "$target_dir/rules" "$target_dir/skills"
+  mkdir -p "$target_dir/agents" "$target_dir/rules" "$target_dir/skills"
 
   # Copy rules and skills as-is (no token substitution needed)
   [ -d "$MERGED_DIR/rules" ] && cp -r "$MERGED_DIR/rules"/* "$target_dir/rules/" 2>/dev/null || true
@@ -135,6 +136,12 @@ generate_agents() {
   # Copy config files
   [ -f "$MERGED_DIR/CLAUDE.md" ] && cp "$MERGED_DIR/CLAUDE.md" "$target_dir/"
 
+  # Copy settings.json for Claude Code
+  if [ "$tool_name" = "claude" ] && [ -f "$MERGED_DIR/.claude/settings.json" ]; then
+    mkdir -p "$target_dir/.claude"
+    cp "$MERGED_DIR/.claude/settings.json" "$target_dir/.claude/"
+  fi
+
   # Process agent files with envsubst for model tokens
   export MODEL_SMART="$model_smart"
   export MODEL_NORMAL="$model_normal"
@@ -142,21 +149,21 @@ generate_agents() {
   export MODEL_APPLIER="$model_applier"
 
   local count=0
-  for src in "$MERGED_DIR"/agent/*.md; do
+  for src in "$MERGED_DIR"/agents/*.md; do
     [ -f "$src" ] || continue
     local name
     name=$(basename "$src")
 
     # Substitute model tokens
     envsubst '${MODEL_SMART},${MODEL_NORMAL},${MODEL_CHEAP},${MODEL_APPLIER}' \
-      < "$src" > "$target_dir/agent/$name"
+      < "$src" > "$target_dir/agents/$name"
 
     # For Claude Code: transform frontmatter to Claude Code format
     if [ "$tool_name" = "claude" ]; then
-      transform_for_claude "$target_dir/agent/$name"
+      transform_for_claude "$target_dir/agents/$name"
     else
       # For OpenCode: just remove the allowed_tools line
-      sed -i '/^allowed_tools:/d' "$target_dir/agent/$name"
+      sed -i '/^allowed_tools:/d' "$target_dir/agents/$name"
     fi
 
     count=$((count + 1))
@@ -275,9 +282,9 @@ main() {
     "claude"
 
   local oc_count
-  oc_count=$(ls "$OPENCODE_DIR"/agent/*.md 2>/dev/null | wc -l)
+  oc_count=$(ls "$OPENCODE_DIR"/agents/*.md 2>/dev/null | wc -l)
   local cc_count
-  cc_count=$(ls "$CLAUDE_DIR"/agent/*.md 2>/dev/null | wc -l)
+  cc_count=$(ls "$CLAUDE_DIR"/agents/*.md 2>/dev/null | wc -l)
   local skills_count
   skills_count=$(ls -d "$OPENCODE_DIR"/skills/*/ 2>/dev/null | wc -l)
 
