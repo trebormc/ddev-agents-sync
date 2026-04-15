@@ -1,4 +1,7 @@
-[![tests](https://github.com/trebormc/ddev-agents-sync/actions/workflows/tests.yml/badge.svg)](https://github.com/trebormc/ddev-agents-sync/actions/workflows/tests.yml)
+[![add-on registry](https://img.shields.io/badge/DDEV-Add--on_Registry-blue)](https://addons.ddev.com)
+[![tests](https://github.com/trebormc/ddev-agents-sync/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/trebormc/ddev-agents-sync/actions/workflows/tests.yml?query=branch%3Amain)
+[![last commit](https://img.shields.io/github/last-commit/trebormc/ddev-agents-sync)](https://github.com/trebormc/ddev-agents-sync/commits)
+[![release](https://img.shields.io/github/v/release/trebormc/ddev-agents-sync)](https://github.com/trebormc/ddev-agents-sync/releases/latest)
 
 # ddev-agents-sync
 
