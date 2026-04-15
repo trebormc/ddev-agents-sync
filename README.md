@@ -4,6 +4,12 @@
 
 A DDEV add-on that automatically syncs AI agent repositories and generates tool-specific configurations for [OpenCode](https://github.com/trebormc/ddev-opencode) and [Claude Code](https://github.com/trebormc/ddev-claude-code).
 
+> **Part of [DDEV AI Workspace](https://github.com/trebormc/ddev-ai-workspace)** — a modular ecosystem of DDEV add-ons for AI-powered Drupal development. Install the full stack with one command: `ddev add-on get trebormc/ddev-ai-workspace`
+>
+> Created by [Robert Menetray](https://menetray.com) · Sponsored by [DruScan](https://druscan.com)
+
+**What problem does this solve?** AI tools like OpenCode and Claude Code each expect agent configurations in a different format. This add-on lets you write agents once (using a shared "fat frontmatter" format) and automatically generates the correct configuration for each tool. It also resolves model tokens, so the same agent definition can use different models depending on the tool.
+
 On every `ddev start`, this container clones or updates the configured repositories, resolves model aliases, and produces two separate agent directories -- one optimized for each AI tool.
 
 ## Quick Start
@@ -231,7 +237,7 @@ This add-on is part of [DDEV AI Workspace](https://github.com/trebormc/ddev-ai-w
 
 ## Disclaimer
 
-This project is not affiliated with Anthropic, OpenCode, Beads, Playwright, Microsoft, or DDEV. AI-generated code may contain errors -- always review changes before deploying to production. See [menetray.com](https://menetray.com) for more information and [DruScan](https://druscan.com) for Drupal auditing tools.
+This project is an independent initiative by [Robert Menetray](https://menetray.com), sponsored by [DruScan](https://druscan.com). It is not affiliated with Anthropic, OpenCode, Beads, Playwright, Microsoft, or DDEV. AI-generated code may contain errors -- always review changes before deploying to production.
 
 ## License
 
