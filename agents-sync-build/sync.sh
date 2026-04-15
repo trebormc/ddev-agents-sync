@@ -246,11 +246,13 @@ copy_opencode_configs() {
 
 main() {
   log "Starting sync"
+
+  # Create all subpath mount targets FIRST. Dependent containers (claude-code,
+  # opencode) mount these via Docker volume subpath and fail if they don't exist.
+  # The healthcheck gates on CLAUDE.md, so this must complete before anything else.
   mkdir -p "$REPOS_DIR" \
     "$OPENCODE_DIR/agents" "$OPENCODE_DIR/rules" "$OPENCODE_DIR/skills" \
     "$CLAUDE_DIR/agents" "$CLAUDE_DIR/rules" "$CLAUDE_DIR/skills"
-
-  # Ensure subpath mount targets exist (prevent race condition with dependent containers)
   [ -f "$OPENCODE_DIR/CLAUDE.md" ] || touch "$OPENCODE_DIR/CLAUDE.md"
   [ -f "$CLAUDE_DIR/CLAUDE.md" ] || touch "$CLAUDE_DIR/CLAUDE.md"
 

@@ -35,7 +35,7 @@ services:
     command: ["bash", "-c", "/usr/local/bin/sync.sh; sleep infinity"]
 
     healthcheck:
-      test: ["CMD", "test", "-d", "/agents-claude/agents"]
+      test: ["CMD", "test", "-f", "/agents-claude/CLAUDE.md"]
       interval: 2s
       timeout: 2s
       retries: 30
