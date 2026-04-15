@@ -10,7 +10,7 @@ A DDEV add-on that automatically syncs AI agent repositories and generates tool-
 
 **What problem does this solve?** AI tools like OpenCode and Claude Code each expect agent configurations in a different format. This add-on lets you write agents once (using a shared "fat frontmatter" format) and automatically generates the correct configuration for each tool. It also resolves model tokens, so the same agent definition can use different models depending on the tool.
 
-On every `ddev start`, this container clones or updates the configured repositories, resolves model aliases, and produces two separate agent directories -- one optimized for each AI tool.
+On every `ddev start`, this container clones or updates the configured repositories, resolves model aliases, and produces two separate agent directories (one optimized for each AI tool).
 
 ## Quick Start
 
@@ -100,11 +100,11 @@ The output directories are Docker named volumes (`ddev-{sitename}-agents-opencod
 
 Files are copied from each repo in order. The merge is a simple file-level override:
 
-- `.claude/agents/*.md` -- merged (later repos can add or override agents)
-- `.claude/skills/*/SKILL.md` -- merged (later repos can add or override skills)
-- `.claude/rules/*.md` -- merged (later repos can add or override rules)
-- `.env.agents` -- overridden by the last repo that provides it
-- `CLAUDE.md`, `opencode.json.example` -- overridden by the last repo
+- `.claude/agents/*.md`: merged (later repos can add or override agents)
+- `.claude/skills/*/SKILL.md`: merged (later repos can add or override skills)
+- `.claude/rules/*.md`: merged (later repos can add or override rules)
+- `.env.agents`: overridden by the last repo that provides it
+- `CLAUDE.md`, `opencode.json.example`: overridden by the last repo
 
 ## Model Token System
 
@@ -241,7 +241,7 @@ This add-on is part of [DDEV AI Workspace](https://github.com/trebormc/ddev-ai-w
 
 ## Disclaimer
 
-This project is an independent initiative by [Robert Menetray](https://menetray.com), sponsored by [DruScan](https://druscan.com). It is not affiliated with Anthropic, OpenCode, Beads, Playwright, Microsoft, or DDEV. AI-generated code may contain errors -- always review changes before deploying to production.
+This project is an independent initiative by [Robert Menetray](https://menetray.com), sponsored by [DruScan](https://druscan.com). It is not affiliated with Anthropic, OpenCode, Beads, Playwright, Microsoft, or DDEV. AI-generated code may contain errors. Always review changes before deploying to production.
 
 ## License
 
