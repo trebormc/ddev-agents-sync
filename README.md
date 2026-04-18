@@ -39,7 +39,7 @@ OpenCode and Claude Code will automatically pick up the synced agents.
 
 ## Prerequisites
 
-- [DDEV](https://ddev.readthedocs.io/) >= v1.23.5
+- [DDEV](https://ddev.readthedocs.io/) >= v1.24.10
 
 ## Configuration
 
@@ -85,7 +85,7 @@ On ddev start:
   │     - envsubst: ${MODEL_CHEAP} → haiku                          │
   │     - Converts frontmatter to Claude Code format                 │
   │     - Renames allowed_tools → tools (CSV)                        │
-  │     - Removes mode, temperature, permission blocks               │
+  │     - Removes mode, temperature, maxSteps, tools, permission     │
   │                                                                  │
   │  6. Sleep (stay alive for depends_on)                            │
   └──────────────────────────────────────────────────────────────────┘
@@ -209,7 +209,7 @@ Agent system prompt content...
 
 During sync:
 - **For OpenCode**: the `allowed_tools:` line is removed. Everything else stays.
-- **For Claude Code**: `mode:`, `temperature:`, `tools:` (object), and `permission:` are removed. `allowed_tools:` is renamed to `tools:`.
+- **For Claude Code**: `mode:`, `temperature:`, `maxSteps:`, `tools:` (object), and `permission:` are removed. `allowed_tools:` is renamed to `tools:`.
 
 ## Commands
 
@@ -240,7 +240,7 @@ This add-on is part of [DDEV AI Workspace](https://github.com/trebormc/ddev-ai-w
 | [ddev-ralph](https://github.com/trebormc/ddev-ralph) | Autonomous AI task orchestrator. Delegates work to OpenCode or Claude Code. | Does not require this add-on |
 | [ddev-beads](https://github.com/trebormc/ddev-beads) | [Beads](https://github.com/steveyegge/beads) git-backed task tracker shared by all AI containers. | Sibling dependency |
 | [ddev-playwright-mcp](https://github.com/trebormc/ddev-playwright-mcp) | Headless Playwright browser for browser automation and visual testing. | Sibling dependency |
-| [drupal-ai-agents](https://github.com/trebormc/drupal-ai-agents) | 13 agents, 4 rules, 14 skills for Drupal development. Default repo synced by this add-on. | Content synced by this add-on |
+| [drupal-ai-agents](https://github.com/trebormc/drupal-ai-agents) | 10 agents, 12 rules, 24 skills for Drupal development. Default repo synced by this add-on. | Content synced by this add-on |
 
 ## Disclaimer
 
