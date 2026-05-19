@@ -22,7 +22,6 @@ post_install_actions:
     #ddev-description:Configuring Agents Sync
     if [ ! -f .env.agents-sync ]; then
       cat > .env.agents-sync << 'ENVEOF'
-    #ddev-generated
     # Agents Sync configuration
     # Comma-separated list of git repositories to sync
     # Later repos override earlier ones (useful for private overrides)
@@ -44,7 +43,6 @@ post_install_actions:
     # To override, uncomment and edit the variables in this file.
     if [ ! -f .env.agents ]; then
       cat > .env.agents << 'MODELSEOF'
-    #ddev-generated
     # AI Model Configuration (optional overrides)
     # Default models come from the agent repository automatically.
     # Uncomment and edit any variable below to override.
