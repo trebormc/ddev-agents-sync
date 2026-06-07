@@ -9,6 +9,9 @@ services:
     build:
       context: .
       dockerfile: agents-sync-build/Dockerfile.agents-sync
+      args:
+        USER_UID: ${DDEV_UID:-1000}
+        USER_GID: ${DDEV_GID:-1000}
     labels:
       com.ddev.site-name: ${DDEV_SITENAME}
       com.ddev.approot: ${DDEV_APPROOT}
