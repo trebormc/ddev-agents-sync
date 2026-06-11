@@ -92,31 +92,30 @@ merge_repos() {
 }
 
 # Load model aliases from .env.agents
-# Priority: local override (.ddev/.env.agents) > repo default
+# Variable-level cascade — files are sourced in ascending priority, so each
+# level only needs to define the variables it wants to override:
+#   1. repo default  (.env.agents in the agents repo)
+#   2. host shared   (~/.ddev/agents-sync/.env.agents — all DDEV projects)
+#   3. project       (.ddev/.env.agents — this project only)
 load_env() {
-  local repo_file="$MERGED_DIR/.env.agents"
-  local override_file="/tmp/env-agents-override"
-  local env_file=""
+  local loaded=""
 
-  # Local override takes priority over repo default
-  # Only use override if it has uncommented variable assignments
-  if [ -f "$override_file" ] && grep -q '^[A-Z]' "$override_file" 2>/dev/null; then
-    env_file="$override_file"
-    log "Using local model config from .ddev/.env.agents"
-  elif [ -f "$repo_file" ]; then
-    env_file="$repo_file"
-    log "Using model config from repo .env.agents"
-  fi
+  set -a
+  for f in "$MERGED_DIR/.env.agents" "/tmp/env-agents-host" "/tmp/env-agents-override"; do
+    # Only source files with uncommented variable assignments
+    if [ -f "$f" ] && grep -q '^[A-Z]' "$f" 2>/dev/null; then
+      # shellcheck disable=SC1090
+      source "$f"
+      loaded="${loaded:+$loaded, }$f"
+    fi
+  done
+  set +a
 
-  if [ -z "$env_file" ]; then
+  if [ -z "$loaded" ]; then
     log "ERROR: No .env.agents found. Sync the repo or create .ddev/.env.agents"
     return 1
   fi
-
-  set -a
-  # shellcheck disable=SC1090
-  source "$env_file"
-  set +a
+  log "Model config loaded from: $loaded"
 }
 
 # Generate agent files for a specific tool (OpenCode or Claude Code)

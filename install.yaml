@@ -37,15 +37,17 @@ post_install_actions:
     else
       echo ".env.agents-sync already exists, skipping"
     fi
-    # Create empty .env.agents placeholder if missing.
-    # Docker requires the file to exist before mounting, otherwise it creates a directory.
-    # Default models come from the agent repo (.env.agents in drupal-ai-agents).
-    # To override, uncomment and edit the variables in this file.
-    if [ ! -f .env.agents ]; then
-      cat > .env.agents << 'MODELSEOF'
-    # AI Model Configuration (optional overrides)
+    # Create .env.agents placeholders if missing — PROJECT level and HOST
+    # (shared) level. Docker requires both files to exist before mounting,
+    # otherwise it creates directories.
+    # Model config is a variable-level cascade (each level only needs the
+    # variables it wants to override):
+    #   repo default < ~/.ddev/agents-sync/.env.agents < .ddev/.env.agents
+    MODELS_TEMPLATE='# AI Model Configuration (optional overrides)
     # Default models come from the agent repository automatically.
-    # Uncomment and edit any variable below to override.
+    # Uncomment and edit any variable below to override — you only need
+    # the variables you want to change (variable-level cascade):
+    #   repo default < ~/.ddev/agents-sync/.env.agents (all projects) < .ddev/.env.agents (this project)
     # Changes take effect after: ddev agents-update && ddev restart
     #
     # --- OpenCode models (provider/model-id format) ---
@@ -58,11 +60,18 @@ post_install_actions:
     #CC_MODEL_SMART=opus
     #CC_MODEL_NORMAL=sonnet
     #CC_MODEL_CHEAP=haiku
-    #CC_MODEL_APPLIER=haiku
-    MODELSEOF
-      echo "Created .env.agents — defaults from repo, edit to override"
+    #CC_MODEL_APPLIER=haiku'
+    if [ ! -f .env.agents ]; then
+      printf '%s\n' "$MODELS_TEMPLATE" > .env.agents
+      echo "Created .env.agents — defaults from repo, edit to override (this project)"
     else
       echo ".env.agents already exists, skipping"
+    fi
+    HOST_AGENTS_DIR="${HOME}/.ddev/agents-sync"
+    mkdir -p "$HOST_AGENTS_DIR"
+    if [ ! -f "$HOST_AGENTS_DIR/.env.agents" ]; then
+      printf '%s\n' "$MODELS_TEMPLATE" > "$HOST_AGENTS_DIR/.env.agents"
+      echo "Created $HOST_AGENTS_DIR/.env.agents — edit to override models for ALL DDEV projects"
     fi
     echo "Agents Sync configured."
     echo ""
@@ -70,7 +79,7 @@ post_install_actions:
     echo ""
     echo "Default: syncs from trebormc/drupal-ai-agents"
     echo "Custom repos: edit .ddev/.env.agents-sync"
-    echo "Custom models: edit .ddev/.env.agents"
+    echo "Custom models: edit .ddev/.env.agents (project) or ~/.ddev/agents-sync/.env.agents (all projects)"
     echo "Update:  ddev agents-update"
 
 removal_actions:

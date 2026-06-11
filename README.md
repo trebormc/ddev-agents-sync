@@ -124,7 +124,15 @@ Agent `.md` files use **model tokens** instead of hardcoded model names. This al
 
 ### How tokens are resolved
 
-The `.env.agents` file in the agent repository defines the mapping:
+Token values come from `.env.agents` files, loaded as a variable-level cascade — each level only needs to define the variables it wants to override:
+
+| Priority | Location | Scope |
+|---|---|---|
+| 1 (highest) | `.ddev/.env.agents` in the project | This project only |
+| 2 | `~/.ddev/agents-sync/.env.agents` on the host | ALL your DDEV projects |
+| 3 (lowest) | `.env.agents` in the agents repo | Managed defaults |
+
+The repo default defines the full mapping:
 
 ```bash
 # OpenCode models (provider/model-id format)
@@ -140,19 +148,17 @@ CC_MODEL_CHEAP=haiku
 CC_MODEL_APPLIER=haiku
 ```
 
-During sync, `envsubst` replaces the tokens with the appropriate values for each tool.
+During sync, `envsubst` replaces the tokens with the appropriate values for each tool. Changes take effect after `ddev agents-update && ddev restart`.
 
 ### Changing models
 
 To change which models your agents use:
 
-1. **For all projects**: Fork [drupal-ai-agents](https://github.com/trebormc/drupal-ai-agents), edit `.env.agents`, and point `AGENTS_REPOS` to your fork.
+1. **For all projects**: Edit `~/.ddev/agents-sync/.env.agents` on the host (created by the installer) and uncomment/set only the variables you want to change — e.g. point everything to your own LiteLLM models.
 
-2. **Per project**: Create a private repo with just an `.env.agents` file and add it as a second repo:
-   ```bash
-   AGENTS_REPOS=https://github.com/trebormc/drupal-ai-agents.git,https://github.com/your-org/my-model-config.git
-   ```
-   The `.env.agents` from your repo will override the public one.
+2. **Per project**: Edit `.ddev/.env.agents` in the project. It overrides both the host file and the repo defaults, again variable by variable.
+
+3. **Managed defaults for a team**: Fork [drupal-ai-agents](https://github.com/trebormc/drupal-ai-agents), edit its `.env.agents`, and point `AGENTS_REPOS` to your fork (or add a private repo with just an `.env.agents` as a second repo in `AGENTS_REPOS` — later repos override earlier ones).
 
 ### Writing agents with tokens
 

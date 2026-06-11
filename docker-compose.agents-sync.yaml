@@ -22,6 +22,9 @@ services:
       - agents-opencode-data:/agents-opencode
       - agents-claude-data:/agents-claude
       - ddev-global-cache:/mnt/ddev-global-cache
+      # Model config cascade (variable-level, see sync.sh load_env):
+      #   repo default < host shared (all projects) < project override
+      - ${HOME}/.ddev/agents-sync/.env.agents:/tmp/env-agents-host:ro
       - ./.env.agents:/tmp/env-agents-override:ro
 
     environment:
