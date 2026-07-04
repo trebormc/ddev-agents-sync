@@ -117,10 +117,14 @@ Agent `.md` files use **model tokens** instead of hardcoded model names. This al
 
 | Token | Default (OpenCode) | Default (Claude Code) | Use for |
 |-------|--------------------|-----------------------|---------|
-| `${MODEL_SMART}` | `opencode/kimi-k2.5` | `opus` | Quality gates, planning, research |
-| `${MODEL_NORMAL}` | `opencode/minimax-m2.5` | `sonnet` | General-purpose tasks |
-| `${MODEL_CHEAP}` | `opencode/gpt-5-nano` | `haiku` | Fast, cost-effective agents |
+| `${MODEL_GENIUS}` | `opencode/glm-5.2` | `opus` | Hardest tasks: important code reviews, architecture |
+| `${MODEL_SMART}` | `opencode/glm-5.2` | `opus` | Quality gates, planning, research |
+| `${MODEL_NORMAL}` | `opencode/deepseek-v4-pro` | `sonnet` | General-purpose tasks |
+| `${MODEL_CHEAP}` | `opencode/deepseek-v4-flash` | `haiku` | Fast, cost-effective agents |
 | `${MODEL_APPLIER}` | `opencode/gpt-5-nano` | `haiku` | Mechanical code application |
+| `${MODEL_VISION}` | `opencode/minimax-m3` | `sonnet` | Image/screenshot interpretation — MUST accept image input |
+
+When an `.env.agents` file does not define them, `GENIUS` falls back to the `SMART` value and `VISION` falls back to the `NORMAL` value, so older override files keep working unchanged. `GENIUS` defaults to the same model as `SMART` — override it with a stronger model when you have one. `VISION` must be a vision-capable model or image analysis agents will not see anything.
 
 ### How tokens are resolved
 
@@ -136,16 +140,20 @@ The repo default defines the full mapping:
 
 ```bash
 # OpenCode models (provider/model-id format)
-OC_MODEL_SMART=opencode/kimi-k2.5
-OC_MODEL_NORMAL=opencode/minimax-m2.5
-OC_MODEL_CHEAP=opencode/gpt-5-nano
+OC_MODEL_GENIUS=opencode/glm-5.2
+OC_MODEL_SMART=opencode/glm-5.2
+OC_MODEL_NORMAL=opencode/deepseek-v4-pro
+OC_MODEL_CHEAP=opencode/deepseek-v4-flash
 OC_MODEL_APPLIER=opencode/gpt-5-nano
+OC_MODEL_VISION=opencode/minimax-m3
 
 # Claude Code models (native aliases)
+CC_MODEL_GENIUS=opus
 CC_MODEL_SMART=opus
 CC_MODEL_NORMAL=sonnet
 CC_MODEL_CHEAP=haiku
 CC_MODEL_APPLIER=haiku
+CC_MODEL_VISION=sonnet
 ```
 
 During sync, `envsubst` replaces the tokens with the appropriate values for each tool. Changes take effect after `ddev agents-update && ddev restart`.

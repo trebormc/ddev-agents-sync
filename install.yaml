@@ -51,16 +51,20 @@ post_install_actions:
     # Changes take effect after: ddev agents-update && ddev restart
     #
     # --- OpenCode models (provider/model-id format) ---
-    #OC_MODEL_SMART=opencode/kimi-k2.5
-    #OC_MODEL_NORMAL=opencode/minimax-m2.5
-    #OC_MODEL_CHEAP=opencode/gpt-5-nano
+    #OC_MODEL_GENIUS=opencode/glm-5.2   # hardest tasks (defaults to SMART)
+    #OC_MODEL_SMART=opencode/glm-5.2
+    #OC_MODEL_NORMAL=opencode/deepseek-v4-pro
+    #OC_MODEL_CHEAP=opencode/deepseek-v4-flash
     #OC_MODEL_APPLIER=opencode/gpt-5-nano
+    #OC_MODEL_VISION=opencode/minimax-m3   # MUST accept image input (defaults to NORMAL)
     #
     # --- Claude Code models (native aliases) ---
+    #CC_MODEL_GENIUS=opus
     #CC_MODEL_SMART=opus
     #CC_MODEL_NORMAL=sonnet
     #CC_MODEL_CHEAP=haiku
-    #CC_MODEL_APPLIER=haiku'
+    #CC_MODEL_APPLIER=haiku
+    #CC_MODEL_VISION=sonnet'
     if [ ! -f .env.agents ]; then
       printf '%s\n' "$MODELS_TEMPLATE" > .env.agents
       echo "Created .env.agents — defaults from repo, edit to override (this project)"

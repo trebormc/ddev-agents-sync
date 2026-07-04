@@ -11,9 +11,12 @@
 #   /agents-opencode  — agents with OpenCode model names (provider/model-id)
 #   /agents-claude    — agents with Claude Code model names (native aliases)
 #
-# Model tokens in .claude/agents/*.md frontmatter (${MODEL_SMART},
-# ${MODEL_NORMAL}, ${MODEL_CHEAP}, ${MODEL_APPLIER}) are replaced with
-# real model names from .env.agents during generation.
+# Model tokens in .claude/agents/*.md frontmatter (${MODEL_GENIUS},
+# ${MODEL_SMART}, ${MODEL_NORMAL}, ${MODEL_CHEAP}, ${MODEL_APPLIER},
+# ${MODEL_VISION}) are replaced with real model names from .env.agents
+# during generation. When the env files do not define them, GENIUS (hardest
+# tasks) falls back to the SMART model and VISION (image input) falls back
+# to the NORMAL model.
 #
 # Source repos must use the .claude/ directory layout:
 #   .claude/agents/, .claude/rules/, .claude/skills/
@@ -115,17 +118,28 @@ load_env() {
     log "ERROR: No .env.agents found. Sync the repo or create .ddev/.env.agents"
     return 1
   fi
+
+  # Backward-compatible defaults for tokens added after the original four —
+  # an older agents repo or override file may not define them (set -u safe):
+  : "${OC_MODEL_GENIUS:=$OC_MODEL_SMART}"
+  : "${OC_MODEL_VISION:=$OC_MODEL_NORMAL}"
+  : "${CC_MODEL_GENIUS:=$CC_MODEL_SMART}"
+  : "${CC_MODEL_VISION:=$CC_MODEL_NORMAL}"
+  export OC_MODEL_GENIUS OC_MODEL_VISION CC_MODEL_GENIUS CC_MODEL_VISION
+
   log "Model config loaded from: $loaded"
 }
 
 # Generate agent files for a specific tool (OpenCode or Claude Code)
 generate_agents() {
   local target_dir="$1"
-  local model_smart="$2"
-  local model_normal="$3"
-  local model_cheap="$4"
-  local model_applier="$5"
-  local tool_name="$6"
+  local model_genius="$2"
+  local model_smart="$3"
+  local model_normal="$4"
+  local model_cheap="$5"
+  local model_applier="$6"
+  local model_vision="$7"
+  local tool_name="$8"
 
   mkdir -p "$target_dir/agents" "$target_dir/rules" "$target_dir/skills"
 
@@ -137,10 +151,12 @@ generate_agents() {
   [ -f "$MERGED_DIR/CLAUDE.md" ] && cp "$MERGED_DIR/CLAUDE.md" "$target_dir/"
 
   # Process agent files with envsubst for model tokens
+  export MODEL_GENIUS="$model_genius"
   export MODEL_SMART="$model_smart"
   export MODEL_NORMAL="$model_normal"
   export MODEL_CHEAP="$model_cheap"
   export MODEL_APPLIER="$model_applier"
+  export MODEL_VISION="$model_vision"
 
   local count=0
   for src in "$MERGED_DIR"/agents/*.md; do
@@ -149,7 +165,7 @@ generate_agents() {
     name=$(basename "$src")
 
     # Substitute model tokens
-    envsubst '${MODEL_SMART},${MODEL_NORMAL},${MODEL_CHEAP},${MODEL_APPLIER}' \
+    envsubst '${MODEL_GENIUS},${MODEL_SMART},${MODEL_NORMAL},${MODEL_CHEAP},${MODEL_APPLIER},${MODEL_VISION}' \
       < "$src" > "$target_dir/agents/$name"
 
     # For Claude Code: transform frontmatter to Claude Code format
@@ -226,10 +242,12 @@ transform_for_claude() {
 # Copy OpenCode-specific config files with model token substitution
 # .example files are generated as final config (without .example suffix)
 copy_opencode_configs() {
+  export MODEL_GENIUS="$OC_MODEL_GENIUS"
   export MODEL_SMART="$OC_MODEL_SMART"
   export MODEL_NORMAL="$OC_MODEL_NORMAL"
   export MODEL_CHEAP="$OC_MODEL_CHEAP"
   export MODEL_APPLIER="$OC_MODEL_APPLIER"
+  export MODEL_VISION="$OC_MODEL_VISION"
 
   for f in "$MERGED_DIR"/*.json "$MERGED_DIR"/*.json.example; do
     [ -f "$f" ] || continue
@@ -238,7 +256,7 @@ copy_opencode_configs() {
     # Strip .example suffix — the output is a final config, not a template
     name="${name%.example}"
     # Apply envsubst only to MODEL_* tokens (preserve $WEB_CONTAINER, $FILE, etc.)
-    envsubst '${MODEL_SMART},${MODEL_NORMAL},${MODEL_CHEAP},${MODEL_APPLIER}' \
+    envsubst '${MODEL_GENIUS},${MODEL_SMART},${MODEL_NORMAL},${MODEL_CHEAP},${MODEL_APPLIER},${MODEL_VISION}' \
       < "$f" > "$OPENCODE_DIR/$name"
   done
 }
@@ -272,7 +290,8 @@ main() {
 
   # Generate for OpenCode (OC_* model values)
   generate_agents "$OPENCODE_DIR" \
-    "$OC_MODEL_SMART" "$OC_MODEL_NORMAL" "$OC_MODEL_CHEAP" "$OC_MODEL_APPLIER" \
+    "$OC_MODEL_GENIUS" "$OC_MODEL_SMART" "$OC_MODEL_NORMAL" "$OC_MODEL_CHEAP" \
+    "$OC_MODEL_APPLIER" "$OC_MODEL_VISION" \
     "opencode"
 
   # Copy OpenCode-specific configs (json, notifier, etc.)
@@ -280,7 +299,8 @@ main() {
 
   # Generate for Claude Code (CC_* model values)
   generate_agents "$CLAUDE_DIR" \
-    "$CC_MODEL_SMART" "$CC_MODEL_NORMAL" "$CC_MODEL_CHEAP" "$CC_MODEL_APPLIER" \
+    "$CC_MODEL_GENIUS" "$CC_MODEL_SMART" "$CC_MODEL_NORMAL" "$CC_MODEL_CHEAP" \
+    "$CC_MODEL_APPLIER" "$CC_MODEL_VISION" \
     "claude"
 
   local oc_count
