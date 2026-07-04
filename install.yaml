@@ -64,7 +64,16 @@ post_install_actions:
     #CC_MODEL_NORMAL=sonnet
     #CC_MODEL_CHEAP=haiku
     #CC_MODEL_APPLIER=haiku
-    #CC_MODEL_VISION=sonnet'
+    #CC_MODEL_VISION=sonnet
+    #
+    # --- Git access flags (default: false — user commits manually) ---
+    # Apply to both OpenCode and Claude Code. Force-push and remote-branch
+    # deletion are ALWAYS blocked, whatever these say.
+    #   GIT_ALLOW_COMMIT      git add, git commit
+    #   GIT_ALLOW_OPERATIONS  push (non-force), pull, fetch, merge, rebase,
+    #                         checkout/switch, reset, restore, stash, tag
+    #GIT_ALLOW_COMMIT=true
+    #GIT_ALLOW_OPERATIONS=true'
     if [ ! -f .env.agents ]; then
       printf '%s\n' "$MODELS_TEMPLATE" > .env.agents
       echo "Created .env.agents — defaults from repo, edit to override (this project)"

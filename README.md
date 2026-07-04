@@ -225,6 +225,43 @@ During sync:
 - **For OpenCode**: the `allowed_tools:` line is removed. Everything else stays.
 - **For Claude Code**: `mode:`, `temperature:`, `maxSteps:`, `tools:` (object), and `permission:` are removed. `allowed_tools:` is renamed to `tools:`.
 
+## Git Access
+
+By default AI agents are **not allowed to run git write commands** — they
+present a summary of their changes and you commit manually. This is controlled
+by two flags in the same `.env.agents` cascade as the model tokens, so they
+follow the same `repo default < ~/.ddev/agents-sync/.env.agents < .ddev/.env.agents`
+priority.
+
+| Flag | Default | Allows |
+|------|---------|--------|
+| `GIT_ALLOW_COMMIT` | `false` | `git add`, `git commit` |
+| `GIT_ALLOW_OPERATIONS` | `false` | `git push` (non-force), `pull`, `fetch`, `merge`, `rebase`, `checkout`/`switch`, `reset`, `restore`, `stash`, `tag`, `cherry-pick` |
+
+Set both to enable a full local-and-remote workflow for a trusted environment:
+
+```bash
+# .ddev/.env.agents (this project) or ~/.ddev/agents-sync/.env.agents (all projects)
+GIT_ALLOW_COMMIT=true
+GIT_ALLOW_OPERATIONS=true
+```
+
+Changes take effect after `ddev agents-update && ddev restart`.
+
+**Always blocked, regardless of the flags:** force-push
+(`git push --force`/`-f`/`--force-with-lease`) and remote-branch deletion
+(`git push --delete`/`-d`) — nothing may rewrite or destroy remote history.
+
+The flags are enforced in **both tools**, not just documented in prompts:
+- **OpenCode** — the flags become `allow`/`deny` values in the generated
+  `opencode.json` `permission.bash` map.
+- **Claude Code** — the sync generates a `settings.generated.json` with a
+  `PreToolUse` hook that denies blocked git commands (Claude Code runs in
+  `bypassPermissions` mode, so the hook is the actual enforcement).
+
+The **git-workflow** rule shipped to the agents is generated from these flags,
+so the prompt text always matches what is technically allowed.
+
 ## Commands
 
 ### `ddev agents-update`

@@ -130,6 +130,109 @@ load_env() {
   log "Model config loaded from: $loaded"
 }
 
+# Derive the git-access policy from the two cascade flags. Both default to
+# false (block). The flags are loaded by load_env like any other .env.agents
+# variable, so they follow the same repo < host < project cascade.
+#   GIT_ALLOW_COMMIT       git add + git commit
+#   GIT_ALLOW_OPERATIONS   git push (non-force), pull, fetch, merge, rebase,
+#                          checkout/switch, reset, restore, stash, tag,
+#                          cherry-pick — the normal workflow of a senior dev
+# Anything destructive to the REMOTE is ALWAYS blocked, whatever the flags:
+# force-push (--force/-f/--force-with-lease) and remote-branch deletion
+# (git push --delete/-d).
+#
+# Produces three exported values consumed downstream:
+#   GIT_COMMIT_PERMISSION / GIT_OPERATIONS_PERMISSION  -> opencode.json values
+#   GIT_POLICY                                         -> prompt text (rules)
+setup_git_flags() {
+  : "${GIT_ALLOW_COMMIT:=false}"
+  : "${GIT_ALLOW_OPERATIONS:=false}"
+
+  [ "$GIT_ALLOW_COMMIT" = "true" ] \
+    && GIT_COMMIT_PERMISSION="allow" || GIT_COMMIT_PERMISSION="deny"
+  [ "$GIT_ALLOW_OPERATIONS" = "true" ] \
+    && GIT_OPERATIONS_PERMISSION="allow" || GIT_OPERATIONS_PERMISSION="deny"
+
+  local commit_block ops_block
+  if [ "$GIT_ALLOW_COMMIT" = "true" ]; then
+    commit_block="- You MAY stage and commit locally. To commit: generate the message with the **commit-message** skill (it writes \`commit-msg.txt\`), then run \`git add\` the relevant files, \`git commit -F commit-msg.txt\`, and \`rm commit-msg.txt\`. Commit at logical checkpoints or when the user asks — not after every edit."
+  else
+    commit_block="- You MUST NOT create commits: never run \`git add\` or \`git commit\`. Present a summary and a suggested commit message instead."
+  fi
+  if [ "$GIT_ALLOW_OPERATIONS" = "true" ]; then
+    ops_block="- You MAY run normal repository operations: \`git push\`, \`git pull\`, \`git fetch\`, \`git merge\`, \`git rebase\`, \`git checkout\`/\`git switch\`, \`git reset\`, \`git restore\`, \`git stash\`, \`git tag\`, \`git cherry-pick\`."
+  else
+    ops_block="- You MUST NOT run repository operations: never \`git push\`, \`git pull\`, \`git merge\`, \`git rebase\`, \`git checkout\`, \`git reset\`, \`git stash\`, or \`git tag\`. Leave them to the user."
+  fi
+
+  GIT_POLICY="## Git access (current policy)
+
+${commit_block}
+${ops_block}
+
+**Always blocked, no matter the configuration:** never rewrite or destroy remote history — no force-push (\`git push --force\`, \`-f\`, \`--force-with-lease\`) and no remote-branch deletion (\`git push --delete\`/\`-d\`).
+
+Read-only git is always allowed: \`git status\`, \`git diff\`, \`git log\`, \`git branch\`, \`git show\`."
+
+  export GIT_ALLOW_COMMIT GIT_ALLOW_OPERATIONS \
+    GIT_COMMIT_PERMISSION GIT_OPERATIONS_PERMISSION GIT_POLICY
+
+  log "Git flags: commit=$GIT_ALLOW_COMMIT operations=$GIT_ALLOW_OPERATIONS (force-push always blocked)"
+}
+
+# Generate the Claude Code settings fragment that enforces the git policy.
+# Claude Code runs in bypassPermissions mode, so declarative deny lists are not
+# enough — enforcement is a PreToolUse hook that denies blocked git commands.
+# The hook matches the command as a substring, so it also catches chained
+# commands (e.g. `foo && git push`). Force-push and remote-branch deletion are
+# always denied. The two booleans are passed explicitly so this can be called
+# with a safe (block-all) default before the real flags are known.
+write_claude_settings() {
+  local allow_commit="$1"
+  local allow_operations="$2"
+  local dest="$3"
+
+  # case(1) patterns matched against the full command line. Force-push and
+  # remote-branch deletion are matched with the flag in ANY position after
+  # `git push` (e.g. `git push origin --force`), not just immediately after.
+  local patterns=(
+    "*'git push'*'--force'*"
+    "*'git push'*' -f'*"
+    "*'git push'*'--delete'*"
+    "*'git push'*' -d'*"
+    "*'git push'*' :'*"
+  )
+  [ "$allow_commit" = "true" ] || patterns+=("*'git add '*" "*'git commit'*")
+  if [ "$allow_operations" != "true" ]; then
+    patterns+=(
+      "*'git push'*" "*'git pull'*" "*'git fetch'*" "*'git merge'*"
+      "*'git rebase'*" "*'git checkout'*" "*'git switch'*" "*'git reset'*"
+      "*'git restore'*" "*'git stash'*" "*'git tag'*" "*'git cherry-pick'*"
+    )
+  fi
+
+  local case_patterns
+  case_patterns=$(IFS='|'; echo "${patterns[*]}")
+
+  local reason="This git command is blocked. Set GIT_ALLOW_COMMIT and/or GIT_ALLOW_OPERATIONS to true in .env.agents to allow it. Force-push and remote-branch deletion are never allowed."
+
+  # Shell command run by the hook inside the container. $cmd / $(jq ...) must
+  # stay literal (escaped here); ${case_patterns} and ${reason} are baked in now.
+  local hook_cmd="cmd=\$(jq -r '.tool_input.command'); case \"\$cmd\" in ${case_patterns}) printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"${reason}\"}}'; exit 2;; esac"
+
+  # jq --arg handles JSON escaping of the (quote-heavy) hook command.
+  jq -n --arg cmd "$hook_cmd" '{
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: "Bash",
+          hooks: [ { type: "command", command: $cmd, timeout: 5 } ]
+        }
+      ]
+    }
+  }' > "$dest"
+}
+
 # Generate agent files for a specific tool (OpenCode or Claude Code)
 generate_agents() {
   local target_dir="$1"
@@ -143,9 +246,18 @@ generate_agents() {
 
   mkdir -p "$target_dir/agents" "$target_dir/rules" "$target_dir/skills"
 
-  # Copy rules and skills as-is (no token substitution needed)
-  [ -d "$MERGED_DIR/rules" ] && cp -r "$MERGED_DIR/rules"/* "$target_dir/rules/" 2>/dev/null || true
+  # Copy skills as-is (no token substitution needed)
   [ -d "$MERGED_DIR/skills" ] && cp -r "$MERGED_DIR/skills"/* "$target_dir/skills/" 2>/dev/null || true
+
+  # Copy rules, substituting only ${GIT_POLICY} (git-workflow.md is dynamic).
+  # The envsubst whitelist keeps every other $VAR reference (e.g. $DDEV_DOCROOT
+  # in shell examples) literal.
+  if [ -d "$MERGED_DIR/rules" ]; then
+    for rsrc in "$MERGED_DIR"/rules/*.md; do
+      [ -f "$rsrc" ] || continue
+      envsubst '${GIT_POLICY}' < "$rsrc" > "$target_dir/rules/$(basename "$rsrc")"
+    done
+  fi
 
   # Copy config files
   [ -f "$MERGED_DIR/CLAUDE.md" ] && cp "$MERGED_DIR/CLAUDE.md" "$target_dir/"
@@ -255,8 +367,9 @@ copy_opencode_configs() {
     name=$(basename "$f")
     # Strip .example suffix — the output is a final config, not a template
     name="${name%.example}"
-    # Apply envsubst only to MODEL_* tokens (preserve $WEB_CONTAINER, $FILE, etc.)
-    envsubst '${MODEL_GENIUS},${MODEL_SMART},${MODEL_NORMAL},${MODEL_CHEAP},${MODEL_APPLIER},${MODEL_VISION}' \
+    # Apply envsubst to MODEL_* tokens and the git permission tokens
+    # (preserve $WEB_CONTAINER, $FILE, etc.)
+    envsubst '${MODEL_GENIUS},${MODEL_SMART},${MODEL_NORMAL},${MODEL_CHEAP},${MODEL_APPLIER},${MODEL_VISION},${GIT_COMMIT_PERMISSION},${GIT_OPERATIONS_PERMISSION}' \
       < "$f" > "$OPENCODE_DIR/$name"
   done
 }
@@ -273,6 +386,11 @@ main() {
   [ -f "$OPENCODE_DIR/CLAUDE.md" ] || touch "$OPENCODE_DIR/CLAUDE.md"
   [ -f "$CLAUDE_DIR/CLAUDE.md" ] || touch "$CLAUDE_DIR/CLAUDE.md"
 
+  # Secure default: write the block-all Claude settings BEFORE loading flags so
+  # that if the claude-code container starts mid-sync it never sees an unguarded
+  # config. Overwritten below with the flag-derived version once flags are known.
+  write_claude_settings false false "$CLAUDE_DIR/settings.generated.json"
+
   # Sync each repo
   local index=0
   IFS=',' read -ra REPO_LIST <<< "$REPOS"
@@ -285,8 +403,14 @@ main() {
   # Merge all repos into temp dir
   merge_repos
 
-  # Load model aliases
+  # Load model aliases and git-access flags
   load_env
+
+  # Derive the git policy (tokens for opencode.json + prompt text) and write the
+  # real flag-derived Claude Code settings fragment.
+  setup_git_flags
+  write_claude_settings "$GIT_ALLOW_COMMIT" "$GIT_ALLOW_OPERATIONS" \
+    "$CLAUDE_DIR/settings.generated.json"
 
   # Generate for OpenCode (OC_* model values)
   generate_agents "$OPENCODE_DIR" \

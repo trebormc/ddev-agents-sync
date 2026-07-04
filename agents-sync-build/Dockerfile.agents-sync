@@ -9,11 +9,12 @@ ARG USER_GID
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install only what we need: git, bash, envsubst (gettext-base)
+# Install only what we need: git, bash, envsubst (gettext-base), jq
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
     gettext-base \
+    jq \
     && rm -rf /var/lib/apt/lists/*
 
 # Create user with matching UID/GID
