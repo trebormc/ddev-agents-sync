@@ -229,21 +229,26 @@ During sync:
 
 By default AI agents are **not allowed to run git write commands** — they
 present a summary of their changes and you commit manually. This is controlled
-by two flags in the same `.env.agents` cascade as the model tokens, so they
-follow the same `repo default < ~/.ddev/agents-sync/.env.agents < .ddev/.env.agents`
+**per tool** by two flags in the same `.env.agents` cascade as the model tokens,
+so they follow the same `repo default < ~/.ddev/agents-sync/.env.agents < .ddev/.env.agents`
 priority.
 
-| Flag | Default | Allows |
-|------|---------|--------|
-| `GIT_ALLOW_COMMIT` | `false` | `git add`, `git commit` |
-| `GIT_ALLOW_OPERATIONS` | `false` | `git push` (non-force), `pull`, `fetch`, `merge`, `rebase`, `checkout`/`switch`, `reset`, `restore`, `stash`, `tag`, `cherry-pick` |
+Each flag holds a **comma-separated list of the tools** the capability is
+granted to. Valid tool ids: `opencode`, `claude`. An empty value grants it to
+no tool (the default).
 
-Set both to enable a full local-and-remote workflow for a trusted environment:
+| Flag | Default | Allows (for the listed tools) |
+|------|---------|--------|
+| `GIT_ALLOW_COMMIT` | *(empty)* | `git add`, `git commit` |
+| `GIT_ALLOW_OPERATIONS` | *(empty)* | `git push` (non-force), `pull`, `fetch`, `merge`, `rebase`, `checkout`/`switch`, `reset`, `restore`, `stash`, `tag`, `cherry-pick` |
+
+List a tool in a flag to enable that capability there — for example, let both
+tools commit locally but only Claude Code push:
 
 ```bash
 # .ddev/.env.agents (this project) or ~/.ddev/agents-sync/.env.agents (all projects)
-GIT_ALLOW_COMMIT=true
-GIT_ALLOW_OPERATIONS=true
+GIT_ALLOW_COMMIT=opencode,claude
+GIT_ALLOW_OPERATIONS=claude
 ```
 
 Changes take effect after `ddev agents-update && ddev restart`.
@@ -253,14 +258,14 @@ Changes take effect after `ddev agents-update && ddev restart`.
 (`git push --delete`/`-d`) — nothing may rewrite or destroy remote history.
 
 The flags are enforced in **both tools**, not just documented in prompts:
-- **OpenCode** — the flags become `allow`/`deny` values in the generated
-  `opencode.json` `permission.bash` map.
+- **OpenCode** — a tool's resolved flags become `allow`/`deny` values in the
+  generated `opencode.json` `permission.bash` map.
 - **Claude Code** — the sync generates a `settings.generated.json` with a
   `PreToolUse` hook that denies blocked git commands (Claude Code runs in
   `bypassPermissions` mode, so the hook is the actual enforcement).
 
-The **git-workflow** rule shipped to the agents is generated from these flags,
-so the prompt text always matches what is technically allowed.
+The **git-workflow** rule shipped to each tool is generated from that tool's
+resolved flags, so the prompt text always matches what is technically allowed.
 
 ## Commands
 

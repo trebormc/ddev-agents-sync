@@ -130,9 +130,12 @@ load_env() {
   log "Model config loaded from: $loaded"
 }
 
-# Derive the git-access policy from the two cascade flags. Both default to
-# false (block). The flags are loaded by load_env like any other .env.agents
-# variable, so they follow the same repo < host < project cascade.
+# Per-tool git-access policy. Two cascade flags — GIT_ALLOW_COMMIT and
+# GIT_ALLOW_OPERATIONS — each hold a COMMA-SEPARATED LIST of the AI tools the
+# capability is granted to. Valid tool ids: "opencode", "claude". An empty
+# value grants the capability to no tool (the safe default). The flags are
+# loaded by load_env like any other .env.agents variable, so they follow the
+# same repo < host < project cascade.
 #   GIT_ALLOW_COMMIT       git add + git commit
 #   GIT_ALLOW_OPERATIONS   git push (non-force), pull, fetch, merge, rebase,
 #                          checkout/switch, reset, restore, stash, tag,
@@ -140,26 +143,75 @@ load_env() {
 # Anything destructive to the REMOTE is ALWAYS blocked, whatever the flags:
 # force-push (--force/-f/--force-with-lease) and remote-branch deletion
 # (git push --delete/-d).
-#
-# Produces three exported values consumed downstream:
+
+# Return 0 if tool $1 appears in the comma-separated list $2 (spaces ignored).
+git_tool_allowed() {
+  local tool="$1" list="$2"
+  list=$(echo "$list" | tr -d '[:space:]')
+  case ",$list," in
+    *",$tool,"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Warn about entries in flag $2 (named $1) that are not valid tool ids —
+# typos and legacy true/false values silently resolve to "deny" otherwise.
+warn_unknown_git_tools() {
+  local flag_name="$1" list="$2" item
+  local IFS=','
+  set -f  # no pathname expansion of list items
+  for item in $(echo "$list" | tr -d '[:space:]'); do
+    case "$item" in
+      opencode|claude|'') ;;
+      *) log "WARNING: $flag_name contains unknown tool id '$item' (valid: opencode, claude) — it grants nothing" ;;
+    esac
+  done
+  set +f
+}
+
+# Resolve the two list flags into per-tool booleans, exported for downstream
+# use. Called once after load_env.
+#   OC_GIT_ALLOW_COMMIT / OC_GIT_ALLOW_OPERATIONS  -> OpenCode
+#   CC_GIT_ALLOW_COMMIT / CC_GIT_ALLOW_OPERATIONS  -> Claude Code
+resolve_git_flags() {
+  : "${GIT_ALLOW_COMMIT:=}"
+  : "${GIT_ALLOW_OPERATIONS:=}"
+
+  warn_unknown_git_tools GIT_ALLOW_COMMIT "$GIT_ALLOW_COMMIT"
+  warn_unknown_git_tools GIT_ALLOW_OPERATIONS "$GIT_ALLOW_OPERATIONS"
+
+  git_tool_allowed opencode "$GIT_ALLOW_COMMIT"     && OC_GIT_ALLOW_COMMIT=true     || OC_GIT_ALLOW_COMMIT=false
+  git_tool_allowed opencode "$GIT_ALLOW_OPERATIONS" && OC_GIT_ALLOW_OPERATIONS=true || OC_GIT_ALLOW_OPERATIONS=false
+  git_tool_allowed claude   "$GIT_ALLOW_COMMIT"     && CC_GIT_ALLOW_COMMIT=true     || CC_GIT_ALLOW_COMMIT=false
+  git_tool_allowed claude   "$GIT_ALLOW_OPERATIONS" && CC_GIT_ALLOW_OPERATIONS=true || CC_GIT_ALLOW_OPERATIONS=false
+
+  export OC_GIT_ALLOW_COMMIT OC_GIT_ALLOW_OPERATIONS \
+    CC_GIT_ALLOW_COMMIT CC_GIT_ALLOW_OPERATIONS
+
+  log "Git flags: commit=[${GIT_ALLOW_COMMIT:-<none>}] operations=[${GIT_ALLOW_OPERATIONS:-<none>}] -> opencode(commit=$OC_GIT_ALLOW_COMMIT,ops=$OC_GIT_ALLOW_OPERATIONS) claude(commit=$CC_GIT_ALLOW_COMMIT,ops=$CC_GIT_ALLOW_OPERATIONS) (force-push always blocked)"
+}
+
+# Build the git-access prompt text + opencode.json permission tokens for ONE
+# tool, from its two resolved booleans. Call once per tool right before
+# generating that tool's config. Sets and exports:
 #   GIT_COMMIT_PERMISSION / GIT_OPERATIONS_PERMISSION  -> opencode.json values
 #   GIT_POLICY                                         -> prompt text (rules)
-setup_git_flags() {
-  : "${GIT_ALLOW_COMMIT:=false}"
-  : "${GIT_ALLOW_OPERATIONS:=false}"
+build_git_policy() {
+  local allow_commit="$1"
+  local allow_operations="$2"
 
-  [ "$GIT_ALLOW_COMMIT" = "true" ] \
+  [ "$allow_commit" = "true" ] \
     && GIT_COMMIT_PERMISSION="allow" || GIT_COMMIT_PERMISSION="deny"
-  [ "$GIT_ALLOW_OPERATIONS" = "true" ] \
+  [ "$allow_operations" = "true" ] \
     && GIT_OPERATIONS_PERMISSION="allow" || GIT_OPERATIONS_PERMISSION="deny"
 
   local commit_block ops_block
-  if [ "$GIT_ALLOW_COMMIT" = "true" ]; then
-    commit_block="- You MAY stage and commit locally. To commit: generate the message with the **commit-message** skill (it writes \`commit-msg.txt\`), then run \`git add\` the relevant files, \`git commit -F commit-msg.txt\`, and \`rm commit-msg.txt\`. Commit at logical checkpoints or when the user asks — not after every edit."
+  if [ "$allow_commit" = "true" ]; then
+    commit_block="- You MAY stage and commit locally. To commit: generate the message with the **commit-message** skill (it writes \`commit-msg.txt\`), then run \`git add\` the relevant files, \`git commit -F commit-msg.txt\`, and \`rm commit-msg.txt\`."
   else
     commit_block="- You MUST NOT create commits: never run \`git add\` or \`git commit\`. Present a summary and a suggested commit message instead."
   fi
-  if [ "$GIT_ALLOW_OPERATIONS" = "true" ]; then
+  if [ "$allow_operations" = "true" ]; then
     ops_block="- You MAY run normal repository operations: \`git push\`, \`git pull\`, \`git fetch\`, \`git merge\`, \`git rebase\`, \`git checkout\`/\`git switch\`, \`git reset\`, \`git restore\`, \`git stash\`, \`git tag\`, \`git cherry-pick\`."
   else
     ops_block="- You MUST NOT run repository operations: never \`git push\`, \`git pull\`, \`git merge\`, \`git rebase\`, \`git checkout\`, \`git reset\`, \`git stash\`, or \`git tag\`. Leave them to the user."
@@ -170,14 +222,13 @@ setup_git_flags() {
 ${commit_block}
 ${ops_block}
 
+**Never act proactively:** even when a git write command is allowed above, run it ONLY when the user explicitly asks for it or it is an explicit part of the task you were given. Never commit, push, or run any other git write on your own initiative.
+
 **Always blocked, no matter the configuration:** never rewrite or destroy remote history — no force-push (\`git push --force\`, \`-f\`, \`--force-with-lease\`) and no remote-branch deletion (\`git push --delete\`/\`-d\`).
 
 Read-only git is always allowed: \`git status\`, \`git diff\`, \`git log\`, \`git branch\`, \`git show\`."
 
-  export GIT_ALLOW_COMMIT GIT_ALLOW_OPERATIONS \
-    GIT_COMMIT_PERMISSION GIT_OPERATIONS_PERMISSION GIT_POLICY
-
-  log "Git flags: commit=$GIT_ALLOW_COMMIT operations=$GIT_ALLOW_OPERATIONS (force-push always blocked)"
+  export GIT_COMMIT_PERMISSION GIT_OPERATIONS_PERMISSION GIT_POLICY
 }
 
 # Generate the Claude Code settings fragment that enforces the git policy.
@@ -214,7 +265,7 @@ write_claude_settings() {
   local case_patterns
   case_patterns=$(IFS='|'; echo "${patterns[*]}")
 
-  local reason="This git command is blocked. Set GIT_ALLOW_COMMIT and/or GIT_ALLOW_OPERATIONS to true in .env.agents to allow it. Force-push and remote-branch deletion are never allowed."
+  local reason="This git command is blocked. Add 'claude' to GIT_ALLOW_COMMIT and/or GIT_ALLOW_OPERATIONS in .env.agents to allow it. Force-push and remote-branch deletion are never allowed."
 
   # Shell command run by the hook inside the container. $cmd / $(jq ...) must
   # stay literal (escaped here); ${case_patterns} and ${reason} are baked in now.
@@ -406,22 +457,26 @@ main() {
   # Load model aliases and git-access flags
   load_env
 
-  # Derive the git policy (tokens for opencode.json + prompt text) and write the
-  # real flag-derived Claude Code settings fragment.
-  setup_git_flags
-  write_claude_settings "$GIT_ALLOW_COMMIT" "$GIT_ALLOW_OPERATIONS" \
-    "$CLAUDE_DIR/settings.generated.json"
+  # Resolve the per-tool git flags (each flag is a comma-separated tool list).
+  resolve_git_flags
 
-  # Generate for OpenCode (OC_* model values)
+  # Generate for OpenCode (OC_* model values). Build OpenCode's git policy first
+  # so its prompt text + opencode.json permission tokens match ITS flags.
+  build_git_policy "$OC_GIT_ALLOW_COMMIT" "$OC_GIT_ALLOW_OPERATIONS"
   generate_agents "$OPENCODE_DIR" \
     "$OC_MODEL_GENIUS" "$OC_MODEL_SMART" "$OC_MODEL_NORMAL" "$OC_MODEL_CHEAP" \
     "$OC_MODEL_APPLIER" "$OC_MODEL_VISION" \
     "opencode"
 
-  # Copy OpenCode-specific configs (json, notifier, etc.)
+  # Copy OpenCode-specific configs (json, notifier, etc.) — consumes the git
+  # permission tokens just exported by build_git_policy.
   copy_opencode_configs
 
-  # Generate for Claude Code (CC_* model values)
+  # Generate for Claude Code (CC_* model values). Rebuild the policy with
+  # Claude's flags, then regenerate its rules + settings hook.
+  build_git_policy "$CC_GIT_ALLOW_COMMIT" "$CC_GIT_ALLOW_OPERATIONS"
+  write_claude_settings "$CC_GIT_ALLOW_COMMIT" "$CC_GIT_ALLOW_OPERATIONS" \
+    "$CLAUDE_DIR/settings.generated.json"
   generate_agents "$CLAUDE_DIR" \
     "$CC_MODEL_GENIUS" "$CC_MODEL_SMART" "$CC_MODEL_NORMAL" "$CC_MODEL_CHEAP" \
     "$CC_MODEL_APPLIER" "$CC_MODEL_VISION" \
