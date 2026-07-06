@@ -13,10 +13,13 @@
 #
 # Model tokens in .claude/agents/*.md frontmatter (${MODEL_GENIUS},
 # ${MODEL_SMART}, ${MODEL_NORMAL}, ${MODEL_CHEAP}, ${MODEL_APPLIER},
-# ${MODEL_VISION}) are replaced with real model names from .env.agents
-# during generation. When the env files do not define them, GENIUS (hardest
-# tasks) falls back to the SMART model and VISION (image input) falls back
-# to the NORMAL model.
+# ${MODEL_VISION}, ${MODEL_MAIN}) are replaced with real model names from
+# .env.agents during generation. When the env files do not define them,
+# GENIUS (hardest tasks) falls back to the SMART model, VISION (image input)
+# falls back to the NORMAL model, and MAIN (the orchestrator / main
+# conversation loop) falls back to CHEAP on OpenCode and NORMAL on Claude
+# Code. MAIN is also injected as the default model: top-level "model" in
+# opencode.json and "model" in the generated Claude Code settings.
 #
 # Source repos must use the .claude/ directory layout:
 #   .claude/agents/, .claude/rules/, .claude/skills/
@@ -123,9 +126,12 @@ load_env() {
   # an older agents repo or override file may not define them (set -u safe):
   : "${OC_MODEL_GENIUS:=$OC_MODEL_SMART}"
   : "${OC_MODEL_VISION:=$OC_MODEL_NORMAL}"
+  : "${OC_MODEL_MAIN:=$OC_MODEL_CHEAP}"
   : "${CC_MODEL_GENIUS:=$CC_MODEL_SMART}"
   : "${CC_MODEL_VISION:=$CC_MODEL_NORMAL}"
-  export OC_MODEL_GENIUS OC_MODEL_VISION CC_MODEL_GENIUS CC_MODEL_VISION
+  : "${CC_MODEL_MAIN:=$CC_MODEL_NORMAL}"
+  export OC_MODEL_GENIUS OC_MODEL_VISION OC_MODEL_MAIN \
+    CC_MODEL_GENIUS CC_MODEL_VISION CC_MODEL_MAIN
 
   log "Model config loaded from: $loaded"
 }
@@ -237,11 +243,14 @@ Read-only git is always allowed: \`git status\`, \`git diff\`, \`git log\`, \`gi
 # The hook matches the command as a substring, so it also catches chained
 # commands (e.g. `foo && git push`). Force-push and remote-branch deletion are
 # always denied. The two booleans are passed explicitly so this can be called
-# with a safe (block-all) default before the real flags are known.
+# with a safe (block-all) default before the real flags are known. The optional
+# 4th argument sets the default (orchestrator) model — empty omits the key so
+# the CLI default applies.
 write_claude_settings() {
   local allow_commit="$1"
   local allow_operations="$2"
   local dest="$3"
+  local model="${4:-}"
 
   # case(1) patterns matched against the full command line. Force-push and
   # remote-branch deletion are matched with the flag in ANY position after
@@ -272,7 +281,7 @@ write_claude_settings() {
   local hook_cmd="cmd=\$(jq -r '.tool_input.command'); case \"\$cmd\" in ${case_patterns}) printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"${reason}\"}}'; exit 2;; esac"
 
   # jq --arg handles JSON escaping of the (quote-heavy) hook command.
-  jq -n --arg cmd "$hook_cmd" '{
+  jq -n --arg cmd "$hook_cmd" --arg model "$model" '{
     hooks: {
       PreToolUse: [
         {
@@ -281,7 +290,7 @@ write_claude_settings() {
         }
       ]
     }
-  }' > "$dest"
+  } + (if $model == "" then {} else {model: $model} end)' > "$dest"
 }
 
 # Generate agent files for a specific tool (OpenCode or Claude Code)
@@ -293,7 +302,8 @@ generate_agents() {
   local model_cheap="$5"
   local model_applier="$6"
   local model_vision="$7"
-  local tool_name="$8"
+  local model_main="$8"
+  local tool_name="$9"
 
   mkdir -p "$target_dir/agents" "$target_dir/rules" "$target_dir/skills"
 
@@ -320,6 +330,7 @@ generate_agents() {
   export MODEL_CHEAP="$model_cheap"
   export MODEL_APPLIER="$model_applier"
   export MODEL_VISION="$model_vision"
+  export MODEL_MAIN="$model_main"
 
   local count=0
   for src in "$MERGED_DIR"/agents/*.md; do
@@ -328,7 +339,7 @@ generate_agents() {
     name=$(basename "$src")
 
     # Substitute model tokens
-    envsubst '${MODEL_GENIUS},${MODEL_SMART},${MODEL_NORMAL},${MODEL_CHEAP},${MODEL_APPLIER},${MODEL_VISION}' \
+    envsubst '${MODEL_GENIUS},${MODEL_SMART},${MODEL_NORMAL},${MODEL_CHEAP},${MODEL_APPLIER},${MODEL_VISION},${MODEL_MAIN}' \
       < "$src" > "$target_dir/agents/$name"
 
     # For Claude Code: transform frontmatter to Claude Code format
@@ -411,6 +422,7 @@ copy_opencode_configs() {
   export MODEL_CHEAP="$OC_MODEL_CHEAP"
   export MODEL_APPLIER="$OC_MODEL_APPLIER"
   export MODEL_VISION="$OC_MODEL_VISION"
+  export MODEL_MAIN="$OC_MODEL_MAIN"
 
   for f in "$MERGED_DIR"/*.json "$MERGED_DIR"/*.json.example; do
     [ -f "$f" ] || continue
@@ -420,7 +432,7 @@ copy_opencode_configs() {
     name="${name%.example}"
     # Apply envsubst to MODEL_* tokens and the git permission tokens
     # (preserve $WEB_CONTAINER, $FILE, etc.)
-    envsubst '${MODEL_GENIUS},${MODEL_SMART},${MODEL_NORMAL},${MODEL_CHEAP},${MODEL_APPLIER},${MODEL_VISION},${GIT_COMMIT_PERMISSION},${GIT_OPERATIONS_PERMISSION}' \
+    envsubst '${MODEL_GENIUS},${MODEL_SMART},${MODEL_NORMAL},${MODEL_CHEAP},${MODEL_APPLIER},${MODEL_VISION},${MODEL_MAIN},${GIT_COMMIT_PERMISSION},${GIT_OPERATIONS_PERMISSION}' \
       < "$f" > "$OPENCODE_DIR/$name"
   done
 }
@@ -465,7 +477,7 @@ main() {
   build_git_policy "$OC_GIT_ALLOW_COMMIT" "$OC_GIT_ALLOW_OPERATIONS"
   generate_agents "$OPENCODE_DIR" \
     "$OC_MODEL_GENIUS" "$OC_MODEL_SMART" "$OC_MODEL_NORMAL" "$OC_MODEL_CHEAP" \
-    "$OC_MODEL_APPLIER" "$OC_MODEL_VISION" \
+    "$OC_MODEL_APPLIER" "$OC_MODEL_VISION" "$OC_MODEL_MAIN" \
     "opencode"
 
   # Copy OpenCode-specific configs (json, notifier, etc.) — consumes the git
@@ -473,13 +485,14 @@ main() {
   copy_opencode_configs
 
   # Generate for Claude Code (CC_* model values). Rebuild the policy with
-  # Claude's flags, then regenerate its rules + settings hook.
+  # Claude's flags, then regenerate its rules + settings hook (which also
+  # carries the default orchestrator model, CC_MODEL_MAIN).
   build_git_policy "$CC_GIT_ALLOW_COMMIT" "$CC_GIT_ALLOW_OPERATIONS"
   write_claude_settings "$CC_GIT_ALLOW_COMMIT" "$CC_GIT_ALLOW_OPERATIONS" \
-    "$CLAUDE_DIR/settings.generated.json"
+    "$CLAUDE_DIR/settings.generated.json" "$CC_MODEL_MAIN"
   generate_agents "$CLAUDE_DIR" \
     "$CC_MODEL_GENIUS" "$CC_MODEL_SMART" "$CC_MODEL_NORMAL" "$CC_MODEL_CHEAP" \
-    "$CC_MODEL_APPLIER" "$CC_MODEL_VISION" \
+    "$CC_MODEL_APPLIER" "$CC_MODEL_VISION" "$CC_MODEL_MAIN" \
     "claude"
 
   local oc_count
