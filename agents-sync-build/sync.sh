@@ -25,7 +25,8 @@
 #   .claude/agents/, .claude/rules/, .claude/skills/
 #
 # Environment:
-#   AGENTS_REPOS        Comma-separated git URLs (default: trebormc/drupal-ai-agents)
+#   AGENTS_REPOS        Comma-separated git URLs, each optionally "<url>#<branch-or-tag>"
+#                       (default: trebormc/drupal-ai-agents)
 #   AGENTS_AUTO_UPDATE  "true" (default) or "false" to skip sync on start
 # =============================================================================
 
@@ -42,14 +43,29 @@ TIMEOUT=30
 
 log() { echo "[agents-sync] $*"; }
 
+# A repo entry is "<url>" or "<url>#<branch-or-tag>". The ref part selects a
+# branch or tag (not a commit) and is part of the cache directory name, so
+# changing the ref re-clones instead of reusing the wrong checkout.
+repo_dir_for() { # spec index
+  local spec="$1" index="$2" ref="${1##*#}"
+  if [ "$ref" != "$spec" ] && [ -n "$ref" ]; then
+    printf '%s/repo-%s-%s' "$REPOS_DIR" "$index" "$(printf '%s' "$ref" | tr -c 'A-Za-z0-9._-' '_')"
+  else
+    printf '%s/repo-%s' "$REPOS_DIR" "$index"
+  fi
+}
+
 sync_repo() {
-  local url="$1"
+  local spec="$1"
   local index="$2"
-  local repo_dir="$REPOS_DIR/repo-$index"
+  local url="${spec%%#*}" ref=""
+  [ "$url" != "$spec" ] && ref="${spec##*#}"
+  local repo_dir
+  repo_dir="$(repo_dir_for "$spec" "$index")"
 
   if [ -d "$repo_dir/.git" ]; then
     if [ "$AUTO_UPDATE" = "true" ]; then
-      log "Updating repo $index: $url"
+      log "Updating repo $index: $spec"
       cd "$repo_dir"
       timeout "$TIMEOUT" git pull --ff-only 2>/dev/null && log "  Updated successfully" || log "  Update skipped (no network or conflicts)"
       cd /
@@ -57,8 +73,12 @@ sync_repo() {
       log "Auto-update disabled, using cached repo $index"
     fi
   else
-    log "Cloning repo $index: $url"
-    timeout "$((TIMEOUT * 2))" git clone --depth 1 "$url" "$repo_dir" 2>/dev/null && log "  Cloned successfully" || log "  Clone failed (no network)"
+    log "Cloning repo $index: $spec"
+    if [ -n "$ref" ]; then
+      timeout "$((TIMEOUT * 2))" git clone --depth 1 --branch "$ref" "$url" "$repo_dir" 2>/dev/null && log "  Cloned successfully ($ref)" || log "  Clone failed (no network, or '$ref' is not a branch or tag)"
+    else
+      timeout "$((TIMEOUT * 2))" git clone --depth 1 "$url" "$repo_dir" 2>/dev/null && log "  Cloned successfully" || log "  Clone failed (no network)"
+    fi
   fi
 }
 
@@ -71,7 +91,8 @@ merge_repos() {
   IFS=',' read -ra REPO_LIST <<< "$REPOS"
   for url in "${REPO_LIST[@]}"; do
     url=$(echo "$url" | xargs)
-    local repo_dir="$REPOS_DIR/repo-$index"
+    local repo_dir
+    repo_dir="$(repo_dir_for "$url" "$index")"
 
     if [ -d "$repo_dir" ]; then
       # Copy top-level config files

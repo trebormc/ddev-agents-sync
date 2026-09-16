@@ -62,6 +62,16 @@ AGENTS_REPOS=https://github.com/trebormc/drupal-ai-agents.git,https://github.com
 
 Files from later repos override earlier ones. This lets you use the public Drupal agents as a base and add (or replace) specific agents/skills from a private repo.
 
+### Pinning a branch or tag
+
+Append `#<branch-or-tag>` to a URL to sync that ref instead of the default branch (a commit SHA is not accepted):
+
+```bash
+AGENTS_REPOS=https://github.com/trebormc/drupal-ai-agents.git#feature/new-rule
+```
+
+This is how [ddev-ai-arena](https://github.com/trebormc/ddev-ai-arena) evaluates a change to the agents pack: two candidates, same task, one on `main` and one on the branch under test.
+
 ## How It Works
 
 ```
