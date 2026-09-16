@@ -299,7 +299,7 @@ This add-on is part of [DDEV AI Workspace](https://github.com/trebormc/ddev-ai-w
 | [ddev-opencode](https://github.com/trebormc/ddev-opencode) | [OpenCode](https://opencode.ai) AI CLI container for interactive development. | Auto-installs this add-on |
 | [ddev-claude-code](https://github.com/trebormc/ddev-claude-code) | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI container for interactive development. | Auto-installs this add-on |
 | [ddev-ralph](https://github.com/trebormc/ddev-ralph) | Autonomous AI task orchestrator. Delegates work to OpenCode or Claude Code. | Does not require this add-on |
-| [ddev-ai-arena](https://github.com/trebormc/ddev-ai-arena) | Host command that runs N AI candidates in isolated worktree environments, gates them mechanically and judges them blind. | Applies per-candidate model overrides through this add-on's `.env.agents` cascade |
+| [ddev-ai-arena](https://github.com/trebormc/ddev-ai-arena) | Host package (skill + scripts, not a DDEV add-on) that runs N AI candidates in isolated worktree environments, gates them mechanically and judges them blind. | Applies per-candidate model overrides through this add-on's `.env.agents` cascade |
 | [ddev-beads](https://github.com/trebormc/ddev-beads) | [Beads](https://github.com/steveyegge/beads) git-backed task tracker shared by all AI containers. | Sibling dependency |
 | [ddev-ai-ssh](https://github.com/trebormc/ddev-ai-ssh) | SSH access to the web container for AI agents. | Sibling dependency |
 | [ddev-playwright-mcp](https://github.com/trebormc/ddev-playwright-mcp) | Headless Playwright browser for browser automation and visual testing. | Sibling dependency |
