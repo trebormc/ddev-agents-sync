@@ -119,6 +119,8 @@ Files are copied from each repo in order. The merge is a simple file-level overr
 - `.env.agents`: overridden by the last repo that provides it
 - `CLAUDE.md`, `opencode.json.example`: overridden by the last repo
 
+The generated agents, rules and skills mirror the merge: anything no repo provides any more is removed from the volumes. If a repo cannot be read (failed clone, no network), the sync removes nothing, because an incomplete merge says nothing about what was deleted.
+
 ## Model Token System
 
 Agent `.md` files use **model tokens** instead of hardcoded model names. This allows the same agent definition to work with both OpenCode and Claude Code, and makes it easy to change models globally.

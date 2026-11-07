@@ -67,6 +67,37 @@ teardown() {
   health_checks
 }
 
+@test "sync removes what no repo provides, unless a repo could not be read" {
+  set -eu -o pipefail
+  run ddev add-on get "${DIR}"
+  assert_success
+  run ddev restart -y
+  assert_success
+  health_checks
+
+  local plant='mkdir -p /agents-claude/skills/gone && touch /agents-claude/skills/gone/SKILL.md /agents-opencode/rules/gone.md'
+
+  # A repo that cannot be read: the merge is incomplete, so nothing goes.
+  run ddev exec -s agents-sync bash -c "${plant}; AGENTS_REPOS=\"\${AGENTS_REPOS},/nonexistent/repo\" /usr/local/bin/sync.sh"
+  assert_success
+  assert_output --partial "Incomplete merge"
+  run ddev exec -s agents-sync test -f /agents-claude/skills/gone/SKILL.md
+  assert_success
+  run ddev exec -s agents-sync test -f /agents-opencode/rules/gone.md
+  assert_success
+
+  # A complete merge removes both, and leaves the real content in place.
+  run ddev exec -s agents-sync /usr/local/bin/sync.sh
+  assert_success
+  assert_output --partial "Removed skills/gone from /agents-claude"
+  run ddev exec -s agents-sync test ! -e /agents-claude/skills/gone
+  assert_success
+  run ddev exec -s agents-sync test ! -e /agents-opencode/rules/gone.md
+  assert_success
+  run ddev exec -s agents-sync test -f /agents-claude/skills/arena-protocol/SKILL.md
+  assert_success
+}
+
 # bats test_tags=release
 @test "install from release" {
   set -eu -o pipefail

@@ -40,6 +40,7 @@ DEFAULT_REPO="https://github.com/trebormc/drupal-ai-agents.git"
 REPOS="${AGENTS_REPOS:-$DEFAULT_REPO}"
 AUTO_UPDATE="${AGENTS_AUTO_UPDATE:-true}"
 TIMEOUT=30
+MERGE_COMPLETE=true
 
 log() { echo "[agents-sync] $*"; }
 
@@ -110,6 +111,9 @@ merge_repos() {
 
       # Note: .claude/settings.json is NOT synced — user-level settings
       # in the Claude Code container handle permissions (bypassPermissions mode)
+    elif [ -n "$url" ]; then
+      MERGE_COMPLETE=false
+      log "  Repo $index is unavailable, the merge is incomplete: $url"
     fi
 
     index=$((index + 1))
@@ -315,6 +319,31 @@ write_claude_settings() {
 }
 
 # Generate agent files for a specific tool (OpenCode or Claude Code)
+# Copying only adds, so anything removed from a repo would stay in the persistent
+# volumes forever. Only the contents are pruned: the directories themselves are
+# Docker subpath mounts of the claude-code and opencode containers. A merge that
+# misses a repo (failed clone, no network) proves nothing about what was removed,
+# so it prunes nothing.
+prune_removed() {
+  local target_dir="$1"
+  local dir entry relative
+
+  if [ "$MERGE_COMPLETE" != "true" ]; then
+    log "Incomplete merge: keeping every existing file in $target_dir"
+    return 0
+  fi
+
+  for dir in agents rules skills; do
+    while IFS= read -r -d '' entry; do
+      relative="${entry#"$target_dir/$dir/"}"
+      if [ ! -e "$MERGED_DIR/$dir/$relative" ] && [ ! -L "$MERGED_DIR/$dir/$relative" ]; then
+        rm -rf "$entry"
+        log "Removed $dir/$relative from $target_dir"
+      fi
+    done < <(find "$target_dir/$dir" -mindepth 1 -depth -print0)
+  done
+}
+
 generate_agents() {
   local target_dir="$1"
   local model_genius="$2"
@@ -373,6 +402,8 @@ generate_agents() {
 
     count=$((count + 1))
   done
+
+  prune_removed "$target_dir"
 
   log "Generated $count agents for $tool_name"
 }
