@@ -54,7 +54,7 @@ post_install_actions:
     #OC_MODEL_GENIUS=opencode/glm-5.2   # hardest tasks (defaults to SMART)
     #OC_MODEL_SMART=opencode/glm-5.2
     #OC_MODEL_NORMAL=opencode/deepseek-v4-pro
-    #OC_MODEL_CHEAP=opencode/deepseek-v4-flash
+    #OC_MODEL_CHEAP=opencode/deepseek-v4.1-flash
     #OC_MODEL_APPLIER=opencode/gpt-5-nano
     #OC_MODEL_VISION=opencode/minimax-m3   # MUST accept image input (defaults to NORMAL)
     #
